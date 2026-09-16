@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Termforge",
+    "slug": "termforge",
+    "icon": "./assets/icon.png",
+    "scheme": "termforge",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.adrianglazer.termforge",
+      "icon": "./assets/icon.png",
+      "supportsTablet": false,
+      "deploymentTarget": "17.0",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      "expo-sqlite",
+      "./plugins/withTermforgeNativePackages",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0d1117"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "inlineModules": {
+        "watchedDirectories": ["native"]
+      }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "319c0c22-e047-4fdb-9d44-d841bb7d6a8a"
+      }
+    },
+    "owner": "adrianglazer"
+  }
+}

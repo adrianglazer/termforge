@@ -2,7 +2,7 @@
 
 ## Outcome and principles
 
-Deliver an iOS/iPadOS terminal workstation that establishes real SSH sessions, renders an actual terminal emulator, transfers files over SFTP, and protects credentials locally. It will use Expo development builds, not Expo Go. The React Native layer owns presentation and durable user-facing models; Swift Expo Modules own protocol, secret-storage, and performance-sensitive native work.
+Deliver an iPhone terminal workstation that establishes real SSH sessions, renders an actual terminal emulator, transfers files over SFTP, and protects credentials locally. It will use Expo development builds, not Expo Go. The React Native layer owns presentation and durable user-facing models; Swift Expo Modules own protocol, secret-storage, and performance-sensitive native work.
 
 The product will be offline-capable for saved metadata and will not require a backend, account, analytics, or cloud synchronization. A connection must never be reported as active unless a real native SSH connection exists.
 
@@ -29,7 +29,7 @@ Complete these before committing to native implementation details. Record the re
 1. Inspect the current Expo SDK, React Native, and Expo Modules APIs; create the project only with mutually compatible versions.
 2. Evaluate maintained, permissively licensed iOS terminal renderers/emulators for VT/xterm behavior, Unicode, selection, resize, and high-output performance. Document the decision, rejected alternatives, benchmarks, and accessibility limitations in `docs/terminal-engine.md`.
 3. Evaluate mature iOS SSH libraries for modern algorithms, PTY channels, SFTP, forwarding, jump hosts, host-key verification, licensing, and maintenance. Do not implement SSH or cryptography. Document the choice and threat-sensitive integration details in `docs/ssh.md`.
-4. Validate chosen libraries in a minimal Expo development build on a physical iPhone and iPad before building feature UI.
+4. Validate chosen libraries in a minimal EAS cloud-built Expo development client on a registered physical iPhone before building feature UI; repeat signed acceptance in TestFlight before release. iPad testing is optional and non-blocking.
 5. Check each new dependency for Expo compatibility, maintenance, license, and necessity; pin and document it.
 
 ## Delivery phases
@@ -38,7 +38,7 @@ Complete these before committing to native implementation details. Record the re
 
 Scaffold the Expo/TypeScript project, strict lint/type/test configuration, EAS profiles, app configuration with a clearly replaceable bundle ID, formatting, and a scalable directory structure. Add basic navigation, theme tokens, error/logging contracts, SQLite migration bootstrap, and documentation skeleton.
 
-Exit criteria: clean install, lint, type-check, unit-test command, and development build; no native functionality is claimed yet.
+Exit criteria: clean install, lint, type-check, unit-test command, and reproducible EAS development build; no native functionality is claimed yet.
 
 ### 2. Domain and persistence
 
@@ -50,7 +50,7 @@ Exit criteria: app opens offline and preserves non-secret data across relaunch; 
 
 Create isolated Expo Module contracts for secure storage, terminal rendering/engine, SSH, and SFTP. Build a disposable Docker OpenSSH test server with generated test-only credentials and fixtures. Implement the Keychain module and biometric/auto-lock policy boundary.
 
-Exit criteria: development build connects module events to JavaScript; secure-storage round-trip works only via opaque references; no real secret is committed.
+Exit criteria: an EAS development build installed on the registered iPhone connects module events to JavaScript; secure-storage round-trip works only via opaque references; no real secret is committed.
 
 ### 4. Terminal engine and terminal UX
 
@@ -68,7 +68,7 @@ Exit criteria: integration tests against the disposable server cover authenticat
 
 Deliver server dashboard and editor, key-management UI, real session manager, terminal tabs, recursive split panes, focus/resize/zoom/duplicate/rename, and persistent workspaces. Keep sessions alive through React rerenders but handle iOS suspension honestly and reconnect when foregrounded.
 
-Exit criteria: multiple concurrent sessions and 4-/8-pane layouts are stable on iPad; restored workspaces recreate configuration without falsely restoring a dead connection.
+Exit criteria: multiple concurrent sessions and practical split-pane layouts are stable on iPhone; restored workspaces recreate configuration without falsely restoring a dead connection.
 
 ### 7. Files and remote editing
 
@@ -84,15 +84,15 @@ Exit criteria: each enabled forwarding mode and jump-host path has a real integr
 
 ### 9. Product polish, accessibility, and hardening
 
-Add adaptive iPhone/iPad navigation, hardware keyboard and pointer behavior, VoiceOver labels, Dynamic Type outside terminal grid, reduced motion, all required professional themes, first-run flow, and clearly labeled non-sensitive demo mode. Perform threat review, privacy audit, escape-sequence fuzzing, memory/performance profiling, and privacy-safe production logging review.
+Add adaptive iPhone navigation, VoiceOver labels, Dynamic Type outside terminal grid, reduced motion, all required professional themes, first-run flow, and clearly labeled non-sensitive demo mode. Hardware keyboard, pointer, and iPad-specific navigation are optional. Perform threat review, privacy audit, escape-sequence fuzzing, memory/performance profiling, and privacy-safe production logging review.
 
-Exit criteria: accessibility pass on both device classes; no secret or terminal content appears in diagnostics by default; performance acceptance suite passes with simultaneous sessions, streaming output, and file transfer.
+Exit criteria: accessibility pass on the required physical iPhone; no secret or terminal content appears in diagnostics by default; performance acceptance suite passes with simultaneous sessions, streaming output, and file transfer.
 
 ### 10. Release readiness
 
 Create EAS development/preview/production profiles, development/build/submit/test-server scripts, optional CI that runs checks and can build but never auto-submits for public review, App Store metadata, privacy policy requirements, reviewer notes, troubleshooting, and release checklist.
 
-Exit criteria: a signed TestFlight candidate is built with developer-provided Apple credentials; release submission remains an explicit human action.
+Exit criteria: a signed EAS candidate is uploaded and tested through TestFlight with developer-provided Apple authorization; public App Store review submission remains an explicit human action.
 
 ## Testing strategy
 
@@ -100,9 +100,9 @@ Exit criteria: a signed TestFlight candidate is built with developer-provided Ap
 - Native/integration: disposable SSH server for shell I/O, key auth, known-hosts, SFTP, reconnect, forwarding, and jump hosts.
 - UI/e2e: onboarding, server/key flows, real connection, panes, search, SFTP, and editor save/discard.
 - Security/resilience: invalid credentials, changed host key, malformed server output and escape sequences, very long Unicode lines, network interruption, rapid reconnect, large paste, and SFTP traversal attempts.
-- Device matrix: current supported iOS on at least one iPhone and iPad, in portrait and landscape, including hardware keyboard on iPad.
+- Device matrix: a physical iPhone in portrait and landscape on current supported iOS, plus the oldest supported iOS when hardware is available. iPad and external-keyboard coverage are optional and non-blocking.
 
-Every phase ends with tests, lint, strict TypeScript, documentation updates, and—when native code changes—a development-build verification. Do not start the next phase with known failures.
+Every phase ends with tests, lint, strict TypeScript, documentation updates, and—when native code changes—an EAS development-build verification on devices. Release-oriented phases also repeat the applicable checks through TestFlight. Do not start the next phase with known failures.
 
 ## Documentation and release artifacts
 

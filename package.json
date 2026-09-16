@@ -1,0 +1,46 @@
+{
+  "name": "termforge",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "engines": {
+    "node": ">=22.23.1"
+  },
+  "scripts": {
+    "eas-build-pre-install": "bash ./scripts/eas-pre-build.sh",
+    "start": "expo start --dev-client",
+    "ios": "expo run:ios",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --check app src tests package.json app.json eas.json tsconfig.json eslint.config.js vitest.config.ts docs/development.md tasks/02-gpt-5.6-terra-foundation.md",
+    "format:write": "prettier --write app src tests package.json app.json eas.json tsconfig.json eslint.config.js vitest.config.ts docs/development.md tasks/02-gpt-5.6-terra-foundation.md",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "expo": "57.0.23",
+    "expo-constants": "~57.0.18",
+    "expo-dev-client": "~57.0.19",
+    "expo-linking": "~57.0.10",
+    "expo-router": "57.0.21",
+    "expo-splash-screen": "~57.0.9",
+    "expo-sqlite": "57.0.3",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-screens": "~4.26.0",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.7",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "eslint": "9.39.1",
+    "eslint-config-expo": "~57.0.2",
+    "prettier": "3.7.4",
+    "typescript": "~6.0.3",
+    "vitest": "4.0.16"
+  }
+}

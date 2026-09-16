@@ -1,8 +1,8 @@
-# PROJECT: Terminal Workstation for iOS/iPadOS
+# PROJECT: Terminal Workstation for iPhone
 
-You are the principal engineer responsible for designing, implementing, testing, and preparing a production-quality iOS/iPadOS application.
+You are the principal engineer responsible for designing, implementing, testing, and preparing a production-quality iPhone application.
 
-The application is a powerful Linux-style terminal workstation for iPhone and iPad.
+The application is a powerful Linux-style terminal workstation for iPhone.
 
 The user experience should be inspired by:
 
@@ -80,7 +80,7 @@ There are two distinct execution environments:
 
 ## Local environment
 
-The iPhone/iPad can run functionality explicitly bundled or implemented for iOS.
+The iPhone can run functionality explicitly bundled or implemented for iOS.
 
 Examples:
 
@@ -361,7 +361,7 @@ For example:
 
 [ESC] [TAB] [CTRL] [ALT] [↑] [↓] [←] [→]
 
-On iPad, optimize the keyboard interaction for hardware keyboards.
+External-keyboard optimization is optional and non-blocking for the iPhone-only release.
 
 ---
 
@@ -1099,11 +1099,7 @@ Keys
 Snippets
 Settings
 
-For iPhone, use an adaptive layout.
-
-For iPad, take advantage of larger screens.
-
-Use split-view/navigation patterns appropriate for iPad.
+Use an adaptive iPhone layout.
 
 ---
 
@@ -1113,18 +1109,9 @@ The application must support:
 
 - iPhone portrait
 - iPhone landscape
-- iPad portrait
-- iPad landscape
 
-Do not simply stretch the iPhone UI onto iPad.
-
-On iPad, make use of:
-
-- sidebars
-- multi-column navigation
-- larger terminal layouts
-- hardware keyboards
-- trackpads/mouse where available
+iPad layout, hardware-keyboard, pointer, and multi-column validation are outside
+the required release gate. They may be added later without blocking iPhone delivery.
 
 ---
 
@@ -1708,6 +1695,9 @@ Do not invent Apple's credentials.
 
 The project must be usable from Linux.
 
+EAS Build is the default iOS compiler. Local macOS and Xcode are optional and
+must not be treated as prerequisites for implementation or acceptance.
+
 The developer should be able to do:
 
 npm install
@@ -1717,6 +1707,11 @@ npx expo start
 and use the appropriate development workflow.
 
 Because custom native modules are required, document the development build workflow.
+
+Use EAS internal development builds on a registered iPhone for rapid
+native iteration. Use signed store-distribution builds through TestFlight for
+acceptance and release-candidate testing. A TestFlight build does not replace
+the development client for Metro/native debugging.
 
 Provide:
 
@@ -1733,6 +1728,10 @@ where appropriate.
 # 59. EAS BUILD
 
 Configure EAS so that iOS builds can be produced in the cloud.
+
+Record the EAS build ID/image, source revision, dependency locks, resolved
+native graph, signing outcome, and installed-device results. A successful cloud
+build alone is not a passed device test.
 
 The developer should ultimately be able to run:
 
@@ -1839,7 +1838,7 @@ Show:
 
 Welcome to Terminal
 
-A professional terminal and SSH workstation for iPhone and iPad.
+A professional terminal and SSH workstation for iPhone.
 
 Buttons:
 
@@ -2712,7 +2711,7 @@ until the terminal itself is excellent.
 
 # 100. FINAL DEFINITION OF DONE
 
-The application is considered production-ready only when a real user can install it on an iPhone/iPad, create/import an SSH key, configure a Linux server, connect securely, open an interactive shell, use vim/tmux/htop, split multiple terminal sessions into panes, transfer files over SFTP, manage multiple servers, disconnect/reconnect, and use the application reliably without needing a proprietary cloud backend.
+The application is considered production-ready only when a real user can install it on an iPhone, create/import an SSH key, configure a Linux server, connect securely, open an interactive shell, use vim/tmux/htop, split multiple terminal sessions into panes, transfer files over SFTP, manage multiple servers, disconnect/reconnect, and use the application reliably without needing a proprietary cloud backend.
 
 The application must build through Expo/EAS and be suitable for TestFlight and App Store submission.
 

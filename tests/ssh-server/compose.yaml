@@ -1,0 +1,37 @@
+name: termforge-ssh-test
+
+x-ssh-service: &ssh-service
+  build: .
+  environment:
+    TEST_USER_PASSWORD: ${TEST_USER_PASSWORD:?run scripts/start-test-server.sh first}
+  volumes:
+    - ./generated/authorized_keys:/run/termforge-credentials/authorized_keys:ro
+  restart: 'no'
+  healthcheck:
+    test: ['CMD-SHELL', 'sshd -t && nc -z 127.0.0.1 22']
+    interval: 2s
+    timeout: 2s
+    retries: 20
+
+services:
+  target:
+    <<: *ssh-service
+    hostname: target
+    ports:
+      - '${SSH_BIND_ADDRESS:-127.0.0.1}:${TARGET_SSH_PORT:-2222}:22'
+    volumes:
+      - ./generated/authorized_keys:/run/termforge-credentials/authorized_keys:ro
+      - target-host-keys:/etc/ssh/host-keys
+
+  bastion:
+    <<: *ssh-service
+    hostname: bastion
+    ports:
+      - '${SSH_BIND_ADDRESS:-127.0.0.1}:${BASTION_SSH_PORT:-2223}:22'
+    volumes:
+      - ./generated/authorized_keys:/run/termforge-credentials/authorized_keys:ro
+      - bastion-host-keys:/etc/ssh/host-keys
+
+volumes:
+  target-host-keys:
+  bastion-host-keys:
