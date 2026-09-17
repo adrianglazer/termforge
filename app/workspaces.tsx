@@ -12,8 +12,10 @@ import {
 import { router } from 'expo-router';
 
 import { ScreenShell } from '@/components/ScreenShell';
+import { NativeTerminalView } from '@/native/termforgeNative';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { ServerRepository } from '@/servers/repository';
+import { sessionManager, type ManagedSession } from '@/sessions/manager';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { PaneLeaf, PaneNode, Workspace } from '@/types/domain';
 import { closePane, findPane, replacePane, resizeSplit, splitPane } from '@/workspaces/paneTree';
@@ -33,6 +35,7 @@ export default function WorkspacesScreen() {
   const [renaming, setRenaming] = useState(false);
   const [focusedPaneId, setFocusedPaneId] = useState<string>();
   const [zoomedPaneId, setZoomedPaneId] = useState<string>();
+  const [liveSessions, setLiveSessions] = useState<ManagedSession[]>([]);
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
     try {
@@ -48,6 +51,7 @@ export default function WorkspacesScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => sessionManager.subscribe(setLiveSessions), []);
   async function persist(workspace: Workspace) {
     try {
       const db = await openMetadataDatabase();
@@ -140,6 +144,11 @@ export default function WorkspacesScreen() {
       }),
       updatedAt: new Date().toISOString(),
     });
+  }
+  function closePaneSession(sessionId: string) {
+    void sessionManager
+      .close(sessionId)
+      .catch(() => setError('The pane session could not be disconnected.'));
   }
   function removeWorkspace(workspace: Workspace) {
     Alert.alert(
@@ -265,6 +274,8 @@ export default function WorkspacesScreen() {
                 onAssign={assignServer}
                 servers={servers}
                 focusedPaneId={focusedPaneId}
+                liveSessions={liveSessions}
+                onDisconnect={closePaneSession}
               />
             </>
           ) : (
@@ -278,6 +289,8 @@ export default function WorkspacesScreen() {
               onAssign={assignServer}
               servers={servers}
               focusedPaneId={focusedPaneId}
+              liveSessions={liveSessions}
+              onDisconnect={closePaneSession}
             />
           )}
         </ScrollView>
@@ -299,6 +312,8 @@ function Pane({
   onAssign,
   servers,
   focusedPaneId,
+  liveSessions,
+  onDisconnect,
 }: {
   node: PaneNode;
   onSplit: (id: string, axis: 'row' | 'column') => void;
@@ -309,6 +324,8 @@ function Pane({
   onAssign: (id: string, serverId: string) => void;
   servers: Server[];
   focusedPaneId: string | undefined;
+  liveSessions: ManagedSession[];
+  onDisconnect: (sessionId: string) => void;
 }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -336,6 +353,8 @@ function Pane({
           onAssign={onAssign}
           servers={servers}
           focusedPaneId={focusedPaneId}
+          liveSessions={liveSessions}
+          onDisconnect={onDisconnect}
         />
         <Pane
           node={node.children[1]}
@@ -347,6 +366,8 @@ function Pane({
           onAssign={onAssign}
           servers={servers}
           focusedPaneId={focusedPaneId}
+          liveSessions={liveSessions}
+          onDisconnect={onDisconnect}
         />
       </View>
     );
@@ -363,7 +384,16 @@ function Pane({
         {node.title ?? 'Disconnected terminal'}
         {focusedPaneId === node.id ? ' · focused' : ''}
       </Text>
-      <Text style={{ color: theme.muted }}>Reconnect from Servers to attach a fresh session.</Text>
+      {liveSessions.find((session) => session.paneId === node.id) ? (
+        <LivePane
+          session={liveSessions.find((session) => session.paneId === node.id)!}
+          onDisconnect={onDisconnect}
+        />
+      ) : (
+        <Text style={{ color: theme.muted }}>
+          Reconnect from Servers to attach a fresh session.
+        </Text>
+      )}
       {node.serverId ? (
         <Pressable
           accessibilityRole="button"
@@ -406,6 +436,33 @@ function Pane({
     </Pressable>
   );
 }
+function LivePane({
+  session,
+  onDisconnect,
+}: {
+  session: ManagedSession;
+  onDisconnect: (sessionId: string) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.livePane, { borderColor: theme.muted }]}>
+      <View style={styles.liveHeader}>
+        <Text style={{ color: theme.accent }}>Live · {session.state}</Text>
+        <Pressable accessibilityRole="button" onPress={() => onDisconnect(session.sessionId)}>
+          <Text style={{ color: theme.danger }}>Disconnect</Text>
+        </Pressable>
+      </View>
+      <NativeTerminalView
+        style={styles.nativeTerminal}
+        sessionId={session.sessionId}
+        fontSize={14}
+        scrollback={10_000}
+        foregroundColor={theme.text}
+        backgroundColor={theme.background}
+      />
+    </View>
+  );
+}
 const styles = StyleSheet.create({
   page: { flex: 1 },
   create: { paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -429,6 +486,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row' },
   column: { flexDirection: 'column' },
   pane: { flex: 1, minWidth: 150, borderWidth: 1, borderRadius: 10, padding: 12, gap: 8 },
+  livePane: { height: 240, borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+  liveHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 8 },
+  nativeTerminal: { flex: 1, minHeight: 180 },
   paneActions: { gap: 8 },
   serverChoices: { gap: 6 },
 });

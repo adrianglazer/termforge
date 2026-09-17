@@ -113,13 +113,11 @@ describe('jump hosts', () => {
     expect(() => validateJumpGraph([a, b])).toThrow('cycle');
   });
 
-  it('limits jump chains to three hops', () => {
+  it('rejects unsupported multi-hop jump chains', () => {
     const a = { ...server, id: 'a', jumpServerId: 'b' };
     const b = { ...server, id: 'b', jumpServerId: 'c' };
-    const c = { ...server, id: 'c', jumpServerId: 'd' };
-    const d = { ...server, id: 'd', jumpServerId: 'e' };
-    const e = { ...server, id: 'e' };
-    expect(() => validateJumpGraph([a, b, c, d, e])).toThrow('at most three hops');
+    const c = { ...server, id: 'c' };
+    expect(() => validateJumpGraph([a, b, c])).toThrow('Only one jump host');
   });
 });
 

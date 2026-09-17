@@ -149,8 +149,39 @@ export default function SettingsScreen() {
             </Pressable>
           ))}
         </View>
+        <Text style={[styles.heading, { color: theme.text }]}>Accessory keys</Text>
+        <View style={styles.choices}>
+          {(['compact', 'extended'] as const).map((accessoryPreset) => (
+            <Pressable
+              key={accessoryPreset}
+              accessibilityRole="radio"
+              accessibilityLabel={`${accessoryPreset} accessory key layout`}
+              accessibilityState={{ selected: settings?.accessoryPreset === accessoryPreset }}
+              onPress={() =>
+                settings &&
+                void update({ ...settings, accessoryPreset, updatedAt: new Date().toISOString() })
+              }
+              style={[
+                styles.choice,
+                {
+                  borderColor:
+                    settings?.accessoryPreset === accessoryPreset ? theme.accent : theme.muted,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: settings?.accessoryPreset === accessoryPreset ? theme.accent : theme.text,
+                }}
+              >
+                {accessoryPreset === 'compact' ? 'Compact controls' : 'Extended with F1–F12'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
         <Text style={{ color: theme.muted }}>
-          Terminal selection and accessory-key preferences stay local to this device. Backgrounded
+          Terminal selection, font, scrollback, and accessory-key preferences stay local to this
+          device. Cursor-style customization requires a native terminal bridge update. Backgrounded
           SSH sessions are shown as disconnected after return.
         </Text>
         {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -33,6 +33,7 @@ import {
 import { ServerRepository } from '@/servers/repository';
 import { SettingsRepository } from '@/settings/repository';
 import { sessionManager } from '@/sessions/manager';
+import { joinRemotePath, SftpController, visibleEntries } from '@/sftp/controller';
 import { useTheme } from '@/theme/ThemeProvider';
 
 type Form = {
@@ -90,6 +91,7 @@ export default function TerminalScreen() {
   const [fileSearch, setFileSearch] = useState('');
   const [fileSort, setFileSort] = useState<'name' | 'size'>('name');
   const [transfer, setTransfer] = useState<TransferProgress>();
+  const [retryTransfer, setRetryTransfer] = useState<() => void>();
   const [editor, setEditor] = useState<{ path: string; text: string; fingerprint: string }>();
   const [renameEntry, setRenameEntry] = useState<RemoteEntry>();
   const [renameValue, setRenameValue] = useState('');
@@ -116,6 +118,12 @@ export default function TerminalScreen() {
     Array<{ id: string; kind: 'local' | 'remote'; summary: string }>
   >([]);
   const terminalTheme = terminalThemes[terminalThemeIndex] ?? terminalThemes[0];
+  const sftp = useRef(
+    new SftpController(
+      TermforgeNative,
+      () => `transfer-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    ),
+  );
 
   useEffect(() => {
     void (async () => {
@@ -373,7 +381,7 @@ export default function TerminalScreen() {
   async function refreshFiles() {
     if (!sessionId) return;
     try {
-      setEntries(await TermforgeNative.listDirectory(sessionId, remotePath));
+      setEntries(await sftp.current.browse(sessionId, remotePath));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not list the remote directory.');
     }
@@ -382,10 +390,9 @@ export default function TerminalScreen() {
   async function download(name: string) {
     if (!sessionId) return;
     try {
-      const result = await TermforgeNative.downloadFile(
-        sessionId,
-        joinRemotePath(remotePath, name),
-      );
+      const result = await sftp.current.download(sessionId, joinRemotePath(remotePath, name));
+      if (result.state !== 'completed' || !result.localURL)
+        throw new Error(result.error ?? 'Download interrupted.');
       setTransfer(undefined);
       Alert.alert(
         'Download complete',
@@ -395,7 +402,7 @@ export default function TerminalScreen() {
           {
             text: 'Save to Files',
             onPress: () => {
-              void TermforgeNative.saveFileToFiles(result.url).catch((caught: unknown) =>
+              void TermforgeNative.saveFileToFiles(result.localURL!).catch((caught: unknown) =>
                 setError(
                   caught instanceof Error
                     ? caught.message
@@ -407,6 +414,7 @@ export default function TerminalScreen() {
         ],
       );
     } catch (caught) {
+      setRetryTransfer(() => () => void download(name));
       setError(caught instanceof Error ? caught.message : 'Download failed.');
     }
   }
@@ -429,15 +437,7 @@ export default function TerminalScreen() {
   async function openEditor(entry: RemoteEntry) {
     if (!sessionId || entry.isDirectory) return;
     try {
-      const loaded = await TermforgeNative.readText(
-        sessionId,
-        joinRemotePath(remotePath, entry.name),
-      );
-      setEditor({
-        path: joinRemotePath(remotePath, entry.name),
-        text: loaded.text,
-        fingerprint: loaded.fingerprint,
-      });
+      setEditor(await sftp.current.openEditor(sessionId, joinRemotePath(remotePath, entry.name)));
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'The remote text file could not be opened.',
@@ -450,11 +450,7 @@ export default function TerminalScreen() {
       return;
     }
     try {
-      await TermforgeNative.renameRemote(
-        sessionId,
-        joinRemotePath(remotePath, entry.name),
-        joinRemotePath(remotePath, renameValue.trim()),
-      );
+      await sftp.current.rename(sessionId, remotePath, entry.name, renameValue);
       setRenameEntry(undefined);
       setRenameValue('');
       await refreshFiles();
@@ -475,16 +471,7 @@ export default function TerminalScreen() {
           onPress: () => {
             void (async () => {
               try {
-                if (entry.isDirectory)
-                  await TermforgeNative.removeRemoteDirectory(
-                    sessionId,
-                    joinRemotePath(remotePath, entry.name),
-                  );
-                else
-                  await TermforgeNative.removeRemote(
-                    sessionId,
-                    joinRemotePath(remotePath, entry.name),
-                  );
+                await sftp.current.remove(sessionId, remotePath, entry);
                 await refreshFiles();
               } catch (caught) {
                 setError(
@@ -505,10 +492,7 @@ export default function TerminalScreen() {
       return;
     }
     try {
-      await TermforgeNative.createRemoteDirectory(
-        sessionId,
-        joinRemotePath(remotePath, directoryName.trim()),
-      );
+      await sftp.current.createDirectory(sessionId, remotePath, directoryName);
       setDirectoryName('');
       await refreshFiles();
     } catch (caught) {
@@ -518,7 +502,7 @@ export default function TerminalScreen() {
   async function saveEditor() {
     if (!sessionId || !editor) return;
     try {
-      await TermforgeNative.writeText(sessionId, editor.path, editor.text, editor.fingerprint);
+      await sftp.current.saveEditor(sessionId, { ...editor, dirty: true });
       setEditor(undefined);
       await refreshFiles();
     } catch (caught) {
@@ -528,13 +512,7 @@ export default function TerminalScreen() {
     }
   }
 
-  const visibleEntries = entries
-    .filter((entry) => entry.name.toLowerCase().includes(fileSearch.trim().toLowerCase()))
-    .sort((left, right) => {
-      if (left.isDirectory !== right.isDirectory) return left.isDirectory ? -1 : 1;
-      if (fileSort === 'size') return Number(right.size ?? 0) - Number(left.size ?? 0);
-      return left.name.localeCompare(right.name);
-    });
+  const filteredEntries = visibleEntries(entries, fileSearch, fileSort);
 
   async function upload() {
     if (!sessionId) return;
@@ -546,16 +524,17 @@ export default function TerminalScreen() {
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset) throw new Error('No upload file was selected.');
-      const uploaded = await TermforgeNative.uploadFile(
+      const uploaded = await sftp.current.upload(
         sessionId,
         asset.uri,
         joinRemotePath(remotePath, asset.name),
-        false,
       );
+      if (uploaded.state !== 'completed') throw new Error(uploaded.error ?? 'Upload interrupted.');
       setTransfer(undefined);
       await refreshFiles();
       Alert.alert('Upload complete', `${uploaded.bytes} bytes\nSHA-256: ${uploaded.sha256}`);
     } catch (caught) {
+      setRetryTransfer(() => () => void upload());
       setError(caught instanceof Error ? caught.message : 'Upload failed.');
     }
   }
@@ -778,9 +757,20 @@ export default function TerminalScreen() {
               </Pressable>
             </View>
             {transfer ? (
-              <Text style={styles.fileMeta}>
-                Transferring {transfer.remotePath}: {transfer.bytes}/{transfer.total} bytes
-              </Text>
+              <View style={styles.transferRow}>
+                <Text style={styles.fileMeta}>
+                  Transferring {transfer.remotePath}: {transfer.bytes}/{transfer.total} bytes
+                </Text>
+                <Pressable
+                  onPress={() =>
+                    void TermforgeNative.cancelTransfers(sessionId)
+                      .then(() => setTransfer(undefined))
+                      .catch(() => setError('The transfer could not be cancelled.'))
+                  }
+                >
+                  <Text style={styles.disconnect}>Cancel transfer</Text>
+                </Pressable>
+              </View>
             ) : null}
             {renameEntry ? (
               <View style={styles.renameBar}>
@@ -802,7 +792,7 @@ export default function TerminalScreen() {
               </View>
             ) : null}
             <ScrollView>
-              {visibleEntries.map((entry) => (
+              {filteredEntries.map((entry) => (
                 <View key={entry.name} style={styles.fileRow}>
                   <Pressable onPress={() => openEntry(entry)} style={styles.fileMain}>
                     <Text style={styles.fileName}>
@@ -1086,14 +1076,22 @@ export default function TerminalScreen() {
                 <Text style={styles.toolActive}>Replace all</Text>
               </Pressable>
             </View>
-            <TextInput
-              value={editor.text}
-              onChangeText={(text) => setEditor({ ...editor, text })}
-              multiline
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.editorInput}
-            />
+            <View style={styles.editorBody}>
+              <Text selectable={false} style={styles.lineNumbers}>
+                {editor.text
+                  .split('\n')
+                  .map((_, index) => String(index + 1))
+                  .join('\n')}
+              </Text>
+              <TextInput
+                value={editor.text}
+                onChangeText={(text) => setEditor({ ...editor, text })}
+                multiline
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.editorInput}
+              />
+            </View>
             <Text style={styles.forwardHint}>
               Saving writes a temporary sibling then replaces the remote file. A changed remote
               fingerprint blocks the save.
@@ -1108,7 +1106,24 @@ export default function TerminalScreen() {
             </View>
           </View>
         ) : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorRow}>
+            <Text style={styles.error}>{error}</Text>
+            {retryTransfer ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setError(undefined);
+                  const retry = retryTransfer;
+                  setRetryTransfer(undefined);
+                  retry();
+                }}
+              >
+                <Text style={styles.toolActive}>Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     );
   }
@@ -1367,6 +1382,21 @@ const styles = StyleSheet.create({
   },
   editorInput: {
     flex: 1,
+    minHeight: 180,
+    color: '#f9fafb',
+    textAlignVertical: 'top',
+    fontFamily: 'Courier',
+  },
+  editorBody: { flexDirection: 'row', minHeight: 180 },
+  lineNumbers: {
+    width: 42,
+    color: '#6b7280',
+    fontFamily: 'Courier',
+    textAlign: 'right',
+    paddingRight: 8,
+  },
+  editorInputOld: {
+    flex: 1,
     color: '#e5e7eb',
     borderWidth: 1,
     borderColor: '#4b5563',
@@ -1430,9 +1460,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   disconnect: { color: '#fda4af', fontSize: 12 },
+  transferRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   error: { color: '#fb7185', padding: 8 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
-
-function joinRemotePath(directory: string, name: string): string {
-  return `${directory.replace(/\/$/, '')}/${name}`;
-}

@@ -12,19 +12,18 @@ tracked separately for the shared release candidate under `tasks/README.md`.
 - Terminal: native clipboard copy/paste/share, search, Unicode composer, F1–F12, persisted font,
   scrollback/theme/accessory preset, forwarding controls, and remote PTY resize.
 - Workspaces: persisted pane trees, split/resize/close/focus/zoom/restore/rename/duplicate,
-  server assignment, and initial native-session registry handoff. Restored layouts are disconnected.
+  server assignment, central-session handoff, and live native terminal rendering per active pane.
+  Restored layouts are disconnected.
 - SFTP: browse/search/sort/info, upload/download progress, Save to Files, rename/delete, bounded
-  UTF-8 editor load/save, temporary-sibling write, and content-fingerprint conflict blocking.
+  UTF-8 editor load/save with line numbers, temporary-sibling write, content-fingerprint conflict
+  blocking, visible retry, and session-scoped native transfer-cancel signalling.
+- Jump hosts: saved references, cycle detection, one supported password-authenticated hop, and
+  explicit disclosure that chained jumps and SOCKS are unavailable.
 - Snippets, command palette, settings, non-secret configuration transfer, history, and onboarding.
 
 ## Functional blockers before local code completion
 
-- Complete live concurrent-session rendering inside workspace panes and operation-level transfer
-  cancellation/retry.
-- Connect the tested SFTP controller to the screen and add a native callable operation that aborts
-  an in-flight transfer; controller cancellation currently suppresses late results only.
 - Complete cursor/modifier/accessory customization and broader adaptive/VoiceOver/reduced-motion polish.
-- Validate multi-hop/cyclic jump-host graphs and finish any unsupported-mode disclosures.
 
 ## Local validation evidence
 
@@ -43,8 +42,7 @@ Local validation recorded on 2026-09-17:
   known-host trust decisions.
 - A controlled SFTP/editor adapter covers browse/search/sort failures, directory/file actions,
   transfer progress/integrity/cancellation/retry state, dirty/discard/find-replace behavior, and
-  fingerprint-conflict write-back errors. The native bridge still needs a callable in-flight
-  transfer-cancel operation before controller cancellation proves native abort behavior.
+  fingerprint-conflict write-back errors.
 - UI-controller checks cover onboarding, palette navigation, explicit snippet handoff, themes,
   accessibility labels, Dynamic Type bounds, and portrait/landscape pane rules. Stress checks cover
   Unicode/escape payloads, byte limits, long output, concurrent transfers, and four-session load.

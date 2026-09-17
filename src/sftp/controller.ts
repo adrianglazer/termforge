@@ -171,7 +171,14 @@ export class SftpController {
       const result = await operation();
       const final = this.cancelled.has(id)
         ? { ...running, state: 'cancelled' as const }
-        : { ...running, state: 'completed' as const, bytes: result.bytes, total: result.bytes };
+        : {
+            ...running,
+            state: 'completed' as const,
+            bytes: result.bytes,
+            total: result.bytes,
+            sha256: result.sha256,
+            ...('url' in result ? { localURL: result.url } : {}),
+          };
       this.transfers.set(id, final);
       return final;
     } catch (error) {

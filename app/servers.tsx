@@ -194,6 +194,10 @@ export default function ServersScreen() {
           ) : null}
           <View style={styles.field}>
             <Text style={[styles.label, { color: theme.muted }]}>Jump host (optional)</Text>
+            <Text style={{ color: theme.muted }}>
+              One password-authenticated jump host is supported. Chained jumps and SOCKS are
+              unavailable.
+            </Text>
             <View style={styles.choiceRow}>
               <Pressable
                 accessibilityRole="radio"

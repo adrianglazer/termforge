@@ -10,6 +10,16 @@ import UIKit
 
 private struct HostInspectionRejected: Error {}
 
+private actor TransferCancellationRegistry {
+  static let shared = TransferCancellationRegistry()
+  private var cancelledSessions = Set<String>()
+  func begin(_ id: String) { cancelledSessions.remove(id) }
+  func cancel(_ id: String) { cancelledSessions.insert(id) }
+  func check(_ id: String) throws {
+    if cancelledSessions.contains(id) { throw CancellationError() }
+  }
+}
+
 private final class CapturingHostKeyValidator: NIOSSHClientServerAuthenticationDelegate, @unchecked Sendable {
   private let lock = NSLock()
   private var capturedValue: String?
@@ -432,6 +442,7 @@ internal final class TermforgeNativeModule: Module {
 
     AsyncFunction("downloadFile") { (id: String, remotePath: String) async throws -> [String: String] in
       try Self.validateRemotePath(remotePath)
+      await TransferCancellationRegistry.shared.begin(id)
       let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
       let destination = FileManager.default.temporaryDirectory.appendingPathComponent("termforge-\(UUID().uuidString).download")
       FileManager.default.createFile(atPath: destination.path, contents: nil)
@@ -447,6 +458,7 @@ internal final class TermforgeNativeModule: Module {
             var digest = CryptoKit.SHA256()
             while true {
               try _Concurrency.Task<Never, Never>.checkCancellation()
+              try await TransferCancellationRegistry.shared.check(id)
               var chunk = try await file.read(from: offset, length: 64 * 1024)
               guard chunk.readableBytes > 0 else { break }
               let data = Data(chunk.readableBytesView)
@@ -509,6 +521,7 @@ internal final class TermforgeNativeModule: Module {
 
     AsyncFunction("uploadFile") { (id: String, localURL: URL, remotePath: String, overwrite: Bool) async throws -> [String: String] in
       try Self.validateRemotePath(remotePath)
+      await TransferCancellationRegistry.shared.begin(id)
       guard localURL.isFileURL else { throw Exception(name: "INVALID_LOCAL_URL", description: "Only an authorized local file URL may be uploaded.") }
       let scoped = localURL.startAccessingSecurityScopedResource()
       defer { if scoped { localURL.stopAccessingSecurityScopedResource() } }
@@ -527,6 +540,7 @@ internal final class TermforgeNativeModule: Module {
           try await sftp.withFile(filePath: temporaryPath, flags: [.write, .create, .truncate]) { file in
             while true {
               try _Concurrency.Task<Never, Never>.checkCancellation()
+              try await TransferCancellationRegistry.shared.check(id)
               let data = try input.read(upToCount: 64 * 1024) ?? Data()
               guard !data.isEmpty else { break }
               digest.update(data: data)
@@ -544,6 +558,10 @@ internal final class TermforgeNativeModule: Module {
         try? await client.withSFTP { sftp in try? await sftp.remove(at: temporaryPath) }
         throw error
       }
+    }
+
+    AsyncFunction("cancelTransfers") { (id: String) async in
+      await TransferCancellationRegistry.shared.cancel(id)
     }
 
     AsyncFunction("startRemoteForward") { (id: String, remotePort: Int, localHost: String, localPort: Int) async throws -> String in

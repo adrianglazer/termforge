@@ -141,6 +141,7 @@ type NativeApi = {
     remotePath: string,
     overwrite: boolean,
   ): Promise<{ bytes: string; sha256: string }>;
+  cancelTransfers(id: string): Promise<void>;
   startRemoteForward(
     id: string,
     remotePort: number,

@@ -6,6 +6,8 @@ export type TransferRecord = {
   state: TransferState;
   bytes: string;
   total: string;
+  sha256?: string;
+  localURL?: string;
   error?: string;
 };
 
