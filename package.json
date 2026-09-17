@@ -21,6 +21,7 @@
     "expo": "57.0.23",
     "expo-constants": "~57.0.18",
     "expo-dev-client": "~57.0.19",
+    "expo-document-picker": "~57.0.2",
     "expo-linking": "~57.0.10",
     "expo-router": "57.0.21",
     "expo-splash-screen": "~57.0.9",
@@ -34,9 +35,11 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/react": "19.2.7",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
+    "better-sqlite3": "^11.10.0",
     "eslint": "9.39.1",
     "eslint-config-expo": "~57.0.2",
     "prettier": "3.7.4",

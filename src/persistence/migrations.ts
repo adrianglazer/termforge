@@ -15,6 +15,21 @@ export const migrations: readonly Migration[] = [
       'CREATE TABLE IF NOT EXISTS connection_history (id TEXT PRIMARY KEY, server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE, started_at TEXT NOT NULL, ended_at TEXT, outcome TEXT NOT NULL)',
     ],
   },
+  {
+    version: 2,
+    sql: ["ALTER TABLE keys ADD COLUMN public_key TEXT NOT NULL DEFAULT ''"],
+  },
+  {
+    version: 3,
+    sql: [
+      'ALTER TABLE settings ADD COLUMN terminal_font_size INTEGER NOT NULL DEFAULT 14',
+      'ALTER TABLE settings ADD COLUMN scrollback_lines INTEGER NOT NULL DEFAULT 10000',
+    ],
+  },
+  {
+    version: 4,
+    sql: ["ALTER TABLE settings ADD COLUMN accessory_preset TEXT NOT NULL DEFAULT 'extended'"],
+  },
 ];
 export interface SqlExecutor {
   execAsync(sql: string): Promise<unknown>;

@@ -1,5 +1,7 @@
 # Termforge implementation plan
 
+Validation cadence update: `tasks/README.md` governs local-first testing and consolidated milestone builds. It supersedes per-phase EAS/device gates below; historical phase descriptions do not require additional builds.
+
 ## Outcome and principles
 
 Deliver an iPhone terminal workstation that establishes real SSH sessions, renders an actual terminal emulator, transfers files over SFTP, and protects credentials locally. It will use Expo development builds, not Expo Go. The React Native layer owns presentation and durable user-facing models; Swift Expo Modules own protocol, secret-storage, and performance-sensitive native work.
@@ -102,7 +104,7 @@ Exit criteria: a signed EAS candidate is uploaded and tested through TestFlight 
 - Security/resilience: invalid credentials, changed host key, malformed server output and escape sequences, very long Unicode lines, network interruption, rapid reconnect, large paste, and SFTP traversal attempts.
 - Device matrix: a physical iPhone in portrait and landscape on current supported iOS, plus the oldest supported iOS when hardware is available. iPad and external-keyboard coverage are optional and non-blocking.
 
-Every phase ends with tests, lint, strict TypeScript, documentation updates, and—when native code changes—an EAS development-build verification on devices. Release-oriented phases also repeat the applicable checks through TestFlight. Do not start the next phase with known failures.
+Every phase ends with applicable local tests, lint, strict TypeScript, and documentation updates. Batch native changes through feature completion, hardening, and security review into the shared task 08 candidate under `tasks/README.md`; do not rebuild per phase or repeat full acceptance through TestFlight. Track candidate-only evidence separately while continuing independent work. Do not ignore known local failures.
 
 ## Documentation and release artifacts
 

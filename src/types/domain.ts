@@ -38,6 +38,7 @@ export type KeyMetadata = {
   id: Id;
   name: string;
   algorithm: string;
+  publicKey: string;
   fingerprint: string;
   credentialRef: string;
   protectionPolicy: 'user-presence' | 'biometry-current-set';
@@ -83,6 +84,9 @@ export type Settings = {
   id: 'default';
   theme: string;
   autoLockMinutes: number;
+  terminalFontSize: number;
+  scrollbackLines: number;
+  accessoryPreset: 'compact' | 'extended';
   version: number;
   updatedAt: string;
 };

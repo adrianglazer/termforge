@@ -57,3 +57,25 @@ On backgrounding: hide sensitive UI, cancel prompts/new authentication, persist 
 - Editor starts with UTF-8 text limited to 2 MiB, rejects binary/oversize content, and keeps plaintext out of diagnostics. Compare size/mtime and a content hash where feasible before save; conflicts require user choice. Prefer temporary sibling upload + supported atomic rename; do not promise atomicity when server extensions are absent. Preserve permissions where possible.
 - Local listeners bind loopback by default; remote forwarding requests remote loopback. Validate ports, endpoints and conflicts, cap active channels, and require explicit starts. No automatic restoration of active tunnels. SOCKS, if implemented, is loopback-only and sends hostname resolution through the remote side.
 - Bastion chains must be acyclic and capped at three hops initially. Each hop has independent trust and credentials. Target SSH performs its own handshake inside the forwarded channel. Failure tears down owned descendants without affecting unrelated sessions.
+
+## Task 03 implementation status — 2026-09-16
+
+The native facade now implements password and protected Ed25519 authentication,
+explicit host-key inspection/pinning, and one independently pinned password
+jump hop. Encrypted OpenSSH Ed25519 imports are parsed natively with a 64 KiB
+input bound and stored under a non-synchronizing, passcode-required Keychain
+access policy; JS receives only metadata and an opaque reference after import.
+
+SFTP listing and 64 KiB streaming transfers are implemented with 256 MiB
+per-transfer caps, progress events, task cancellation checks, temporary local
+downloads, temporary remote uploads, explicit overwrite, rename on completion,
+and best-effort cleanup on error. The iOS document picker supplies local file
+authority. Remote forwarding binds the server side to loopback and has explicit
+task ownership/cancellation. SOCKS is still reported as unavailable, and local
+forwarding is not yet implemented.
+
+Development builds `b8df3344-1302-4369-abf1-f9e230925e40` and
+`3d7a156e-1952-4f5b-a894-b2b414a99d0c` finished. The combined SFTP/document
+picker build is `e049db77-4e13-4767-849d-6e16f641024e`; device verification is
+pending, so none of the new key/SFTP/forwarding capabilities are yet labeled
+accepted.

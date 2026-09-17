@@ -47,3 +47,13 @@ export function findPane(node: PaneNode, id: Id): PaneNode | undefined {
       ? (findPane(node.children[0], id) ?? findPane(node.children[1], id))
       : undefined;
 }
+
+export function resizeSplit(root: PaneNode, splitId: Id, ratio: number): PaneNode {
+  const visit = (node: PaneNode): PaneNode =>
+    node.id === splitId && node.kind === 'split'
+      ? { ...node, ratio }
+      : node.kind === 'split'
+        ? { ...node, children: [visit(node.children[0]), visit(node.children[1])] }
+        : node;
+  return validatePaneTree(visit(clone(root)));
+}

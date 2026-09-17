@@ -4,10 +4,18 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 const appIcon = require('../../assets/icon.png');
 
-export function ScreenShell({ title, message }: { title: string; message: string }) {
+export function ScreenShell({
+  title,
+  message,
+  compact = false,
+}: {
+  title: string;
+  message: string;
+  compact?: boolean;
+}) {
   const theme = useTheme();
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <View style={[styles.page, compact && styles.compact, { backgroundColor: theme.background }]}>
       <View style={styles.heading}>
         <Image source={appIcon} style={styles.icon} accessibilityLabel="Termforge icon" />
         <View style={styles.headingText}>
@@ -23,6 +31,30 @@ export function ScreenShell({ title, message }: { title: string; message: string
         <Link href="/terminal" style={{ color: theme.accent }}>
           Terminal
         </Link>
+        <Link href="/keys" style={{ color: theme.accent }}>
+          SSH keys
+        </Link>
+        <Link href="/known-hosts" style={{ color: theme.accent }}>
+          Known hosts
+        </Link>
+        <Link href="/workspaces" style={{ color: theme.accent }}>
+          Workspaces
+        </Link>
+        <Link href="/snippets" style={{ color: theme.accent }}>
+          Snippets
+        </Link>
+        <Link href="/history" style={{ color: theme.accent }}>
+          History
+        </Link>
+        <Link href="/configuration" style={{ color: theme.accent }}>
+          Import & export
+        </Link>
+        <Link href="/onboarding" style={{ color: theme.accent }}>
+          Help
+        </Link>
+        <Link href="/palette" style={{ color: theme.accent }}>
+          Palette
+        </Link>
         <Link href="/settings" style={{ color: theme.accent }}>
           Settings
         </Link>
@@ -32,6 +64,7 @@ export function ScreenShell({ title, message }: { title: string; message: string
 }
 const styles = StyleSheet.create({
   page: { flex: 1, padding: 24, gap: 14 },
+  compact: { flexGrow: 0, flexShrink: 0 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   headingText: { gap: 1 },
   icon: { width: 56, height: 56, borderRadius: 13 },

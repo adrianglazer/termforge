@@ -8,6 +8,8 @@ export function validateServer(input: Server): Server {
     fail('Server name, host, and username are required.');
   if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535)
     fail('Port must be between 1 and 65535.');
+  if (input.authMethod === 'keyboard-interactive')
+    fail('Keyboard-interactive authentication is not available in this build.');
   if (input.credentialRef !== undefined) fail('Credentials cannot be part of server state.');
   return {
     ...input,

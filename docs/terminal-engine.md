@@ -78,6 +78,15 @@ Paste uses native clipboard access only after user action; preserve bracketed-pa
   a POSIX-locale test fixture. The next build uses keyboard-aware form/terminal
   layouts and runs the disposable server under `C.UTF-8`; Unicode and resized
   PTY behavior require a fresh device result.
+- Later iPhone 13 / iOS 26.6.1 acceptance passed protected and encrypted-key
+  use, interactive commands, emoji, vim, htop, reconnect, responsive terminal
+  operation, and basic SFTP browsing/upload/download. The user accepted this
+  development-build scope and waived repeating any missed terminal cases.
+  Direct SwiftTerm entry of Polish composed characters remained defective; the
+  current source adds a bounded UTF-8 composer workaround. It also corrects
+  temporary Control Center `inactive` handling and compacts the rotated header.
+  Those source changes are not device-verified because the EAS iOS quota was
+  exhausted before a new build could be created.
 
 Build the smallest real route after task 02. Before expanding native services or building task 04 UI, record:
 

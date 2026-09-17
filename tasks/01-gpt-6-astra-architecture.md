@@ -1,5 +1,6 @@
 # 01 — GPT-6 Astra: architecture
 
+Validation/build policy: follow `tasks/README.md`. It supersedes older per-task device gates, repeated EAS/TestFlight requirements, and conflicting validation cadence in referenced plans. Historical results below remain evidence only.
 Read `README.md`, `TASKS.md`, `instructions.md`, and `docs/implementation-plan.md`. Execute only this file. Files in `tasks/` run in numerical order; repeated models handle later dependencies. Preserve existing work. Keep documentation and handoffs concise.
 
 - Inspect repository, tooling, native directories, dependencies, and EAS configuration.
@@ -7,7 +8,7 @@ Read `README.md`, `TASKS.md`, `instructions.md`, and `docs/implementation-plan.m
 - Define module contracts, native terminal data flow, session ownership, event/error types, persistence schemas, migrations, recursive pane tree, and opaque credential references. Keep terminal buffers outside React state.
 - Define host trust, authentication, biometric/auto-lock, safe OSC/paste, SFTP path handling, forwarding/jump-host, redaction, and suspension policies. Distinguish mandatory capabilities from library-dependent features.
 - Specify minimum iOS/device targets, EAS cloud-build/TestFlight workflow, and backup policy; record unresolved owner/signing choices without inventing credentials. Local Xcode must not be a prerequisite.
-- Create `docs/architecture.md`, `docs/terminal-engine.md`, `docs/ssh.md`, and `docs/security.md`. Describe the minimal physical-device proof required in task 03 before feature UI starts. Separate researched choices from device-verified results.
+- Create `docs/architecture.md`, `docs/terminal-engine.md`, `docs/ssh.md`, and `docs/security.md`. Describe local validation coverage and the compact device-only milestone checks in `tasks/README.md`; reuse the recorded native proof. Separate researched choices from device-verified results.
 
 Done: implementable contracts and security decisions cover the product requirements; task 02 can scaffold without making fundamental architecture decisions. Update this file with a short completion/blocker note. Do not implement the application.
 
