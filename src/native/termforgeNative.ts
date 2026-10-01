@@ -1,6 +1,7 @@
-import { requireNativeModule, requireNativeViewManager } from 'expo-modules-core';
-import type { EventSubscription } from 'expo-modules-core';
+import { requireNativeModule, requireNativeView as requireNativeViewManager } from 'expo';
 import type { ViewProps } from 'react-native';
+
+type EventSubscription = { remove(): void };
 
 export type HostKey = { algorithm: string; key: string; fingerprint: string };
 export type SessionState = {
@@ -27,16 +28,7 @@ export type TransferProgress = {
 type NativeApi = {
   inspectHostKey(host: string, port: number): Promise<HostKey>;
   createSession(): Promise<string>;
-  connectPassword(
-    id: string,
-    host: string,
-    port: number,
-    username: string,
-    password: string,
-    hostKey: string,
-    columns: number,
-    rows: number,
-  ): Promise<void>;
+  connectPassword(id: string, options: string): Promise<void>;
   disconnect(id: string): Promise<void>;
   sendKey(
     id: string,
@@ -93,32 +85,8 @@ type NativeApi = {
     protection: string;
   }>;
   deleteKey(reference: string): Promise<void>;
-  connectKey(
-    id: string,
-    host: string,
-    port: number,
-    username: string,
-    reference: string,
-    reason: string,
-    hostKey: string,
-    columns: number,
-    rows: number,
-  ): Promise<void>;
-  connectPasswordViaJump(
-    id: string,
-    host: string,
-    port: number,
-    username: string,
-    password: string,
-    hostKey: string,
-    jumpHost: string,
-    jumpPort: number,
-    jumpUsername: string,
-    jumpPassword: string,
-    jumpHostKey: string,
-    columns: number,
-    rows: number,
-  ): Promise<void>;
+  connectKey(id: string, options: string): Promise<void>;
+  connectPasswordViaJump(id: string, options: string): Promise<void>;
   listDirectory(id: string, path: string): Promise<RemoteEntry[]>;
   renameRemote(id: string, sourcePath: string, destinationPath: string): Promise<void>;
   removeRemote(id: string, path: string): Promise<void>;

@@ -10,6 +10,42 @@ import UIKit
 
 private struct HostInspectionRejected: Error {}
 
+private struct PasswordConnectionOptions: Decodable, Sendable {
+  let host: String
+  let port: Int
+  let username: String
+  let password: String
+  let hostKey: String
+  let columns: Int
+  let rows: Int
+}
+
+private struct KeyConnectionOptions: Decodable, Sendable {
+  let host: String
+  let port: Int
+  let username: String
+  let reference: String
+  let reason: String
+  let hostKey: String
+  let columns: Int
+  let rows: Int
+}
+
+private struct JumpPasswordConnectionOptions: Decodable, Sendable {
+  let host: String
+  let port: Int
+  let username: String
+  let password: String
+  let hostKey: String
+  let jumpHost: String
+  let jumpPort: Int
+  let jumpUsername: String
+  let jumpPassword: String
+  let jumpHostKey: String
+  let columns: Int
+  let rows: Int
+}
+
 private actor TransferCancellationRegistry {
   static let shared = TransferCancellationRegistry()
   private var cancelledSessions = Set<String>()
@@ -298,308 +334,435 @@ internal final class TermforgeNativeModule: Module {
   private let keyService = "com.adrianglazer.termforge.keys"
 
   func definition() -> ModuleDefinition {
-    Name("TermforgeNative")
-    Events("onSessionState", "onTerminalTitle", "onTerminalBell", "onTransferProgress", "onForwardState")
+    let moduleName: any AnyDefinition = Name("TermforgeNative")
+    let moduleEvents: any AnyDefinition = Events("onSessionState", "onTerminalTitle", "onTerminalBell", "onTransferProgress", "onForwardState")
 
-    OnCreate {
+    let onCreate: any AnyDefinition = OnCreate {
       Task<Void, Never> { @MainActor in
         TermforgeSessionRegistry.shared.event = { [weak self] name, body in self?.sendEvent(name, body) }
       }
     }
 
-    AsyncFunction("inspectHostKey") { (host: String, port: Int) async throws -> [String: String] in
-      let validator = CapturingHostKeyValidator()
-      var settings = SSHClientSettings(
-        host: host,
-        port: port,
-        authenticationMethod: { SSHAuthenticationMethod.passwordBased(username: "host-key-inspection", password: "unused") },
-        hostKeyValidator: .custom(validator)
-      )
-      settings.connectTimeout = .seconds(10)
-      do { _ = try await SSHClient.connect(to: settings) } catch { }
-      guard let key = validator.captured else { throw Exception(name: "HOST_KEY_UNAVAILABLE", description: "The server did not provide a host key.") }
-      let parts = key.split(separator: " ", maxSplits: 1).map(String.init)
-      guard parts.count == 2, let data = Data(base64Encoded: parts[1]) else { throw Exception(name: "INVALID_HOST_KEY", description: "The server returned an invalid host key.") }
-      let digest = CryptoKit.SHA256.hash(data: data)
-      return ["algorithm": parts[0], "key": key, "fingerprint": "SHA256:" + Data(digest).base64EncodedString().replacingOccurrences(of: "=", with: "")]
+    let inspectHostKeyDefinition: any AnyDefinition = AsyncFunction("inspectHostKey") { (host: String, port: Int) async throws -> [String: String] in
+      try await Self.inspectHostKey(host: host, port: port)
     }
 
-    AsyncFunction("createSession") { () async -> String in await MainActor.run { TermforgeSessionRegistry.shared.create() } }
-    AsyncFunction("connectPassword") { (id: String, host: String, port: Int, username: String, password: String, hostKey: String, columns: Int, rows: Int) async throws in
-      try await MainActor.run { try TermforgeSessionRegistry.shared.connect(id: id, host: host, port: port, username: username, password: password, hostKey: hostKey, columns: columns, rows: rows) }
+    let createSessionDefinition: any AnyDefinition = AsyncFunction("createSession") { () async -> String in await MainActor.run { TermforgeSessionRegistry.shared.create() } }
+    let connectPasswordDefinition: any AnyDefinition = AsyncFunction("connectPassword") { (id: String, encodedOptions: String) async throws -> Void in
+      try await self.connectPassword(id: id, encodedOptions: encodedOptions)
     }
-    AsyncFunction("disconnect") { (id: String) async in await MainActor.run { TermforgeSessionRegistry.shared.close(id: id) } }
-    AsyncFunction("sendKey") { (id: String, key: String) async throws in try await MainActor.run { try TermforgeSessionRegistry.shared.sendKey(id: id, key: key) } }
-    AsyncFunction("sendText") { (id: String, text: String) async throws in try await MainActor.run { try TermforgeSessionRegistry.shared.sendText(id: id, text: text) } }
-    AsyncFunction("pasteClipboard") { (id: String) async throws in try await MainActor.run { try TermforgeSessionRegistry.shared.pasteClipboard(id: id) } }
-    AsyncFunction("copyText") { (text: String) throws in
-      guard text.utf8.count <= 64 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Clipboard text is too large.") }
-      UIPasteboard.general.string = text
+    let disconnectDefinition: any AnyDefinition = AsyncFunction("disconnect") { (id: String) async -> Void in await MainActor.run { TermforgeSessionRegistry.shared.close(id: id) } }
+    let sendKeyDefinition: any AnyDefinition = AsyncFunction("sendKey") { (id: String, key: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.sendKey(id: id, key: key) } }
+    let sendTextDefinition: any AnyDefinition = AsyncFunction("sendText") { (id: String, text: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.sendText(id: id, text: text) } }
+    let pasteClipboardDefinition: any AnyDefinition = AsyncFunction("pasteClipboard") { (id: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.pasteClipboard(id: id) } }
+    let copyTextDefinition: any AnyDefinition = AsyncFunction("copyText") { (text: String) throws -> Void in
+      try self.copyText(text: text)
     }
-    AsyncFunction("shareClipboard") { () throws in
-      guard let text = UIPasteboard.general.string, !text.isEmpty else {
-        throw Exception(name: "INVALID_CONFIG", description: "Copy terminal text before sharing it.")
-      }
-      guard text.utf8.count <= 64 * 1024 else {
-        throw Exception(name: "RESOURCE_LIMIT", description: "Clipboard text is too large to share.")
-      }
-      guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),
-            let presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
-        throw Exception(name: "UNSUPPORTED", description: "The share sheet is unavailable right now.")
-      }
-      let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
-      presenter.present(controller, animated: true)
+    let shareClipboardDefinition: any AnyDefinition = AsyncFunction("shareClipboard") { () throws -> Void in
+      try self.shareClipboard()
     }
-    AsyncFunction("saveFileToFiles") { (url: URL) throws in
-      guard url.isFileURL, FileManager.default.fileExists(atPath: url.path) else {
-        throw Exception(name: "PATH_REJECTED", description: "The downloaded file is no longer available.")
-      }
-      guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),
-            let presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
-        throw Exception(name: "UNSUPPORTED", description: "Files export is unavailable right now.")
-      }
-      let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
-      presenter.present(picker, animated: true)
+    let saveFileToFilesDefinition: any AnyDefinition = AsyncFunction("saveFileToFiles") { (url: URL) throws -> Void in
+      try self.saveFileToFiles(url: url)
     }
-    AsyncFunction("searchTerminal") { (id: String, term: String, direction: String, caseSensitive: Bool) async throws -> [String: Int] in try await MainActor.run { try TermforgeSessionRegistry.shared.search(id: id, term: term, direction: direction, caseSensitive: caseSensitive) } }
-    AsyncFunction("clearScrollback") { (id: String) async throws in try await MainActor.run { try TermforgeSessionRegistry.shared.clearScrollback(id: id) } }
+    let searchTerminalDefinition: any AnyDefinition = AsyncFunction("searchTerminal") { (id: String, term: String, direction: String, caseSensitive: Bool) async throws -> [String: Int] in try await MainActor.run { try TermforgeSessionRegistry.shared.search(id: id, term: term, direction: direction, caseSensitive: caseSensitive) } }
+    let clearScrollbackDefinition: any AnyDefinition = AsyncFunction("clearScrollback") { (id: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.clearScrollback(id: id) } }
 
-    AsyncFunction("importEd25519Key") { (openSSH: String, passphrase: String, protection: String) throws -> [String: String] in
-      guard openSSH.utf8.count <= 64 * 1024 else { throw Exception(name: "KEY_TOO_LARGE", description: "Private key exceeds the 64 KiB import limit.") }
-      let key: Crypto.Curve25519.Signing.PrivateKey
-      do { key = try .init(sshEd25519: openSSH, decryptionKey: passphrase.isEmpty ? nil : Data(passphrase.utf8)) }
-      catch { throw Exception(name: "INVALID_KEY_OR_PASSPHRASE", description: "The Ed25519 key or passphrase is invalid.") }
-      let reference = UUID().uuidString.lowercased()
-      try self.storePrivateKey(key.rawRepresentation, reference: reference, protection: protection)
-      let publicKey = Self.openSSHPublicKey(key.publicKey.rawRepresentation)
-      return ["reference": reference, "algorithm": "ed25519", "publicKey": publicKey, "fingerprint": Self.fingerprint(publicKey), "protection": protection]
+    let importEd25519KeyDefinition: any AnyDefinition = AsyncFunction("importEd25519Key") { (openSSH: String, passphrase: String, protection: String) throws -> [String: String] in
+      try self.importEd25519Key(openSSH: openSSH, passphrase: passphrase, protection: protection)
     }
 
-    AsyncFunction("generateEd25519Key") { (protection: String) throws -> [String: String] in
-      let key = Crypto.Curve25519.Signing.PrivateKey()
-      let reference = UUID().uuidString.lowercased()
-      try self.storePrivateKey(key.rawRepresentation, reference: reference, protection: protection)
-      let publicKey = Self.openSSHPublicKey(key.publicKey.rawRepresentation)
-      return ["reference": reference, "algorithm": "ed25519", "publicKey": publicKey, "fingerprint": Self.fingerprint(publicKey), "protection": protection]
+    let generateEd25519KeyDefinition: any AnyDefinition = AsyncFunction("generateEd25519Key") { (protection: String) throws -> [String: String] in
+      try self.generateEd25519Key(protection: protection)
     }
 
-    AsyncFunction("deleteKey") { (reference: String) throws in
-      let status = SecItemDelete([
-        kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: self.keyService,
-        kSecAttrAccount as String: reference,
-        kSecAttrSynchronizable as String: false,
-      ] as CFDictionary)
-      guard status == errSecSuccess || status == errSecItemNotFound else {
-        throw Exception(name: "KEY_UNAVAILABLE", description: "The protected key could not be deleted.")
-      }
+    let deleteKeyDefinition: any AnyDefinition = AsyncFunction("deleteKey") { (reference: String) throws -> Void in
+      try self.deleteKey(reference: reference)
     }
 
-    AsyncFunction("connectKey") { (id: String, host: String, port: Int, username: String, reference: String, reason: String, hostKey: String, columns: Int, rows: Int) async throws in
-      let raw = try self.loadPrivateKey(reference: reference, reason: reason)
-      let key = try Crypto.Curve25519.Signing.PrivateKey(rawRepresentation: raw)
-      try await MainActor.run { try TermforgeSessionRegistry.shared.connectKey(id: id, host: host, port: port, username: username, privateKey: key, hostKey: hostKey, columns: columns, rows: rows) }
+    let connectKeyDefinition: any AnyDefinition = AsyncFunction("connectKey") { (id: String, encodedOptions: String) async throws -> Void in
+      try await self.connectKey(id: id, encodedOptions: encodedOptions)
     }
 
-    AsyncFunction("connectPasswordViaJump") { (id: String, host: String, port: Int, username: String, password: String, hostKey: String, jumpHost: String, jumpPort: Int, jumpUsername: String, jumpPassword: String, jumpHostKey: String, columns: Int, rows: Int) async throws in
-      try await MainActor.run { try TermforgeSessionRegistry.shared.connectPasswordViaJump(id: id, host: host, port: port, username: username, password: password, hostKey: hostKey, jumpHost: jumpHost, jumpPort: jumpPort, jumpUsername: jumpUsername, jumpPassword: jumpPassword, jumpHostKey: jumpHostKey, columns: columns, rows: rows) }
+    let connectPasswordViaJumpDefinition: any AnyDefinition = AsyncFunction("connectPasswordViaJump") { (id: String, encodedOptions: String) async throws -> Void in
+      try await self.connectPasswordViaJump(id: id, encodedOptions: encodedOptions)
     }
 
-    AsyncFunction("listDirectory") { (id: String, path: String) async throws -> [[String: Any]] in
-      try Self.validateRemotePath(path)
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      return try await client.withSFTP { sftp in
-        let messages = try await sftp.listDirectory(atPath: path)
-        return messages.flatMap(\.components).filter { $0.filename != "." && $0.filename != ".." }.map { item in
-          ["name": item.filename, "longName": item.longname, "size": item.attributes.size.map { String($0) } ?? NSNull(), "permissions": item.attributes.permissions.map { String($0) } ?? NSNull(), "isDirectory": item.attributes.permissions.map { ($0 & 0o170000) == 0o040000 } ?? false]
-        }
-      }
+    let listDirectoryDefinition: any AnyDefinition = AsyncFunction("listDirectory") { (id: String, path: String) async throws -> [[String: Any]] in
+      try await self.listDirectory(id: id, path: path)
     }
 
-    AsyncFunction("renameRemote") { (id: String, sourcePath: String, destinationPath: String) async throws in
-      try Self.validateRemotePath(sourcePath); try Self.validateRemotePath(destinationPath)
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      try await client.withSFTP { sftp in try await sftp.rename(at: sourcePath, to: destinationPath) }
+    let renameRemoteDefinition: any AnyDefinition = AsyncFunction("renameRemote") { (id: String, sourcePath: String, destinationPath: String) async throws -> Void in
+      try await self.renameRemote(id: id, sourcePath: sourcePath, destinationPath: destinationPath)
     }
 
-    AsyncFunction("removeRemote") { (id: String, path: String) async throws in
-      try Self.validateRemotePath(path)
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      try await client.withSFTP { sftp in try await sftp.remove(at: path) }
+    let removeRemoteDefinition: any AnyDefinition = AsyncFunction("removeRemote") { (id: String, path: String) async throws -> Void in
+      try await self.removeRemote(id: id, path: path)
     }
 
-    AsyncFunction("createRemoteDirectory") { (id: String, path: String) async throws in
-      try Self.validateRemotePath(path)
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      try await client.withSFTP { sftp in try await sftp.createDirectory(atPath: path) }
+    let createRemoteDirectoryDefinition: any AnyDefinition = AsyncFunction("createRemoteDirectory") { (id: String, path: String) async throws -> Void in
+      try await self.createRemoteDirectory(id: id, path: path)
     }
 
-    AsyncFunction("removeRemoteDirectory") { (id: String, path: String) async throws in
-      try Self.validateRemotePath(path)
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      try await client.withSFTP { sftp in try await sftp.rmdir(at: path) }
+    let removeRemoteDirectoryDefinition: any AnyDefinition = AsyncFunction("removeRemoteDirectory") { (id: String, path: String) async throws -> Void in
+      try await self.removeRemoteDirectory(id: id, path: path)
     }
 
-    AsyncFunction("downloadFile") { (id: String, remotePath: String) async throws -> [String: String] in
-      try Self.validateRemotePath(remotePath)
-      await TransferCancellationRegistry.shared.begin(id)
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      let destination = FileManager.default.temporaryDirectory.appendingPathComponent("termforge-\(UUID().uuidString).download")
-      FileManager.default.createFile(atPath: destination.path, contents: nil)
-      do {
-        let result = try await client.withSFTP { sftp in
-          try await sftp.withFile(filePath: remotePath, flags: .read) { file in
-            let attributes = try await file.readAttributes()
-            let total = attributes.size ?? 0
-            guard total <= 256 * 1024 * 1024 else { throw Exception(name: "FILE_TOO_LARGE", description: "Downloads are limited to 256 MiB.") }
-            let output = try FileHandle(forWritingTo: destination)
-            defer { try? output.close() }
-            var offset: UInt64 = 0
-            var digest = CryptoKit.SHA256()
-            while true {
-              try _Concurrency.Task<Never, Never>.checkCancellation()
-              try await TransferCancellationRegistry.shared.check(id)
-              var chunk = try await file.read(from: offset, length: 64 * 1024)
-              guard chunk.readableBytes > 0 else { break }
-              let data = Data(chunk.readableBytesView)
-              try output.write(contentsOf: data)
-              digest.update(data: data)
-              offset += UInt64(data.count)
-              await MainActor.run { TermforgeSessionRegistry.shared.progress(id: id, remotePath: remotePath, bytes: offset, total: total) }
-            }
-            return ["url": destination.absoluteString, "bytes": String(offset), "sha256": digest.finalize().map { String(format: "%02x", $0) }.joined()]
-          }
-        }
-        return result
-      } catch {
-        try? FileManager.default.removeItem(at: destination)
-        throw error
-      }
+    let downloadFileDefinition: any AnyDefinition = AsyncFunction("downloadFile") { (id: String, remotePath: String) async throws -> [String: String] in
+      try await self.downloadFile(id: id, remotePath: remotePath)
     }
 
-    AsyncFunction("readText") { (id: String, remotePath: String) async throws -> [String: String] in
-      try Self.validateRemotePath(remotePath)
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      return try await client.withSFTP { sftp in
-        try await sftp.withFile(filePath: remotePath, flags: .read) { file in
-          let size = try await file.readAttributes().size ?? 0
-          guard size <= 2 * 1024 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Editor files are limited to 2 MiB.") }
-          var bytes: [UInt8] = []; var offset: UInt64 = 0; var digest = CryptoKit.SHA256()
-          while offset < size { var chunk = try await file.read(from: offset, length: min(64 * 1024, Int(size - offset))); let data = Data(chunk.readableBytesView); bytes.append(contentsOf: data); digest.update(data: data); offset += UInt64(chunk.readableBytes) }
-          guard !bytes.contains(0), let text = String(bytes: bytes, encoding: .utf8) else { throw Exception(name: "INVALID_CONFIG", description: "The editor supports UTF-8 text files only.") }
-          return ["text": text, "fingerprint": digest.finalize().map { String(format: "%02x", $0) }.joined()]
-        }
-      }
+    let readTextDefinition: any AnyDefinition = AsyncFunction("readText") { (id: String, remotePath: String) async throws -> [String: String] in
+      try await self.readText(id: id, remotePath: remotePath)
     }
 
-    AsyncFunction("writeText") { (id: String, remotePath: String, text: String, expectedFingerprint: String) async throws in
-      try Self.validateRemotePath(remotePath)
-      let data = Data(text.utf8)
-      guard data.count <= 2 * 1024 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Editor files are limited to 2 MiB.") }
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      let temporaryPath = remotePath + ".termforge-" + UUID().uuidString.lowercased()
-      do {
-        try await client.withSFTP { sftp in
-          var actual = CryptoKit.SHA256()
-          try await sftp.withFile(filePath: remotePath, flags: .read) { file in
-            let size = try await file.readAttributes().size ?? 0; var offset: UInt64 = 0
-            while offset < size { let chunk = try await file.read(from: offset, length: min(64 * 1024, Int(size - offset))); actual.update(data: Data(chunk.readableBytesView)); offset += UInt64(chunk.readableBytes) }
-          }
-          let actualFingerprint = actual.finalize().map { String(format: "%02x", $0) }.joined()
-          guard actualFingerprint == expectedFingerprint else { throw Exception(name: "CONFLICT", description: "The remote file changed after it was opened. Reload it before saving.") }
-          try await sftp.withFile(filePath: temporaryPath, flags: [.write, .create, .truncate]) { file in
-            try await file.write(ByteBuffer(data: data), at: 0)
-          }
-          try? await sftp.remove(at: remotePath)
-          try await sftp.rename(at: temporaryPath, to: remotePath)
-        }
-      } catch {
-        try? await client.withSFTP { sftp in try? await sftp.remove(at: temporaryPath) }
-        throw error
-      }
+    let writeTextDefinition: any AnyDefinition = AsyncFunction("writeText") { (id: String, remotePath: String, text: String, expectedFingerprint: String) async throws -> Void in
+      try await self.writeText(id: id, remotePath: remotePath, text: text, expectedFingerprint: expectedFingerprint)
     }
 
-    AsyncFunction("uploadFile") { (id: String, localURL: URL, remotePath: String, overwrite: Bool) async throws -> [String: String] in
-      try Self.validateRemotePath(remotePath)
-      await TransferCancellationRegistry.shared.begin(id)
-      guard localURL.isFileURL else { throw Exception(name: "INVALID_LOCAL_URL", description: "Only an authorized local file URL may be uploaded.") }
-      let scoped = localURL.startAccessingSecurityScopedResource()
-      defer { if scoped { localURL.stopAccessingSecurityScopedResource() } }
-      let values = try localURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-      guard values.isRegularFile == true else { throw Exception(name: "INVALID_LOCAL_FILE", description: "The selected URL is not a regular file.") }
-      let total = UInt64(values.fileSize ?? 0)
-      guard total <= 256 * 1024 * 1024 else { throw Exception(name: "FILE_TOO_LARGE", description: "Uploads are limited to 256 MiB.") }
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      let temporaryPath = remotePath + ".termforge-" + UUID().uuidString.lowercased()
-      do {
-        let uploaded = try await client.withSFTP { sftp in
-          let input = try FileHandle(forReadingFrom: localURL)
-          defer { try? input.close() }
-          var offset: UInt64 = 0
-          var digest = CryptoKit.SHA256()
-          try await sftp.withFile(filePath: temporaryPath, flags: [.write, .create, .truncate]) { file in
-            while true {
-              try _Concurrency.Task<Never, Never>.checkCancellation()
-              try await TransferCancellationRegistry.shared.check(id)
-              let data = try input.read(upToCount: 64 * 1024) ?? Data()
-              guard !data.isEmpty else { break }
-              digest.update(data: data)
-              try await file.write(ByteBuffer(data: data), at: offset)
-              offset += UInt64(data.count)
-              await MainActor.run { TermforgeSessionRegistry.shared.progress(id: id, remotePath: remotePath, bytes: offset, total: total) }
-            }
-          }
-          if overwrite { try? await sftp.remove(at: remotePath) }
-          try await sftp.rename(at: temporaryPath, to: remotePath)
-          return (offset, digest.finalize().map { String(format: "%02x", $0) }.joined())
-        }
-        return ["bytes": String(uploaded.0), "sha256": uploaded.1]
-      } catch {
-        try? await client.withSFTP { sftp in try? await sftp.remove(at: temporaryPath) }
-        throw error
-      }
+    let uploadFileDefinition: any AnyDefinition = AsyncFunction("uploadFile") { (id: String, localURL: URL, remotePath: String, overwrite: Bool) async throws -> [String: String] in
+      try await self.uploadFile(id: id, localURL: localURL, remotePath: remotePath, overwrite: overwrite)
     }
 
-    AsyncFunction("cancelTransfers") { (id: String) async in
+    let cancelTransfersDefinition: any AnyDefinition = AsyncFunction("cancelTransfers") { (id: String) async -> Void in
       await TransferCancellationRegistry.shared.cancel(id)
     }
 
-    AsyncFunction("startRemoteForward") { (id: String, remotePort: Int, localHost: String, localPort: Int) async throws -> String in
+    let startRemoteForwardDefinition: any AnyDefinition = AsyncFunction("startRemoteForward") { (id: String, remotePort: Int, localHost: String, localPort: Int) async throws -> String in
       try await MainActor.run { try TermforgeSessionRegistry.shared.startRemoteForward(id: id, remotePort: remotePort, localHost: localHost, localPort: localPort) }
     }
 
-    AsyncFunction("startLocalForward") { (id: String, localPort: Int, remoteHost: String, remotePort: Int) async throws -> String in
-      guard (1...65535).contains(localPort), (1...65535).contains(remotePort), !remoteHost.isEmpty else { throw Exception(name: "INVALID_FORWARD", description: "Forward endpoints are invalid.") }
-      let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
-      let bootstrap = ServerBootstrap(group: client.eventLoop)
-        .serverChannelOption(ChannelOptions.backlog, value: 16)
-        .childChannelInitializer { localChannel in
-          localChannel.eventLoop.makeFutureWithTask {
-            let origin = try localChannel.remoteAddress ?? SocketAddress(ipAddress: "127.0.0.1", port: 0)
-            let sshChannel = try await client.createDirectTCPIPChannel(using: .init(targetHost: remoteHost, targetPort: remotePort, originatorAddress: origin)) { channel in
-              channel.eventLoop.makeSucceededVoidFuture()
-            }
-            let (localGlue, sshGlue) = TermforgeGlueHandler.matchedPair()
-            try await localChannel.pipeline.addHandler(localGlue).get()
-            try await sshChannel.pipeline.addHandler(sshGlue).get()
-          }
-        }
-      let listener = try await bootstrap.bind(host: "127.0.0.1", port: localPort).get()
-      let forwardId = UUID().uuidString.lowercased()
-      await MainActor.run { TermforgeSessionRegistry.shared.registerLocalForward(id: id, forwardId: forwardId, channel: listener) }
-      return forwardId
+    let startLocalForwardDefinition: any AnyDefinition = AsyncFunction("startLocalForward") { (id: String, localPort: Int, remoteHost: String, remotePort: Int) async throws -> String in
+      try await self.startLocalForward(id: id, localPort: localPort, remoteHost: remoteHost, remotePort: remotePort)
     }
 
-    AsyncFunction("stopForward") { (id: String, forwardId: String) async in
+    let stopForwardDefinition: any AnyDefinition = AsyncFunction("stopForward") { (id: String, forwardId: String) async -> Void in
       await MainActor.run { TermforgeSessionRegistry.shared.stopForward(id: id, forwardId: forwardId) }
     }
 
-    View(TermforgeTerminalNativeView.self) {
-      Prop("sessionId") { (view, id: String?) in TermforgeSessionRegistry.shared.attach(view, sessionId: id) }
-      Prop("fontSize") { (view, value: Double) in view.setFontSize(value) }
-      Prop("scrollback") { (view, value: Int) in view.setScrollback(value) }
-      Prop("foregroundColor") { (view, value: String) in view.setForegroundColor(value) }
-      Prop("backgroundColor") { (view, value: String) in view.setBackgroundColor(value) }
+    let terminalView: any AnyDefinition = View(TermforgeTerminalNativeView.self) {
+      Prop("sessionId") { (view: TermforgeTerminalNativeView, id: String?) -> Void in TermforgeSessionRegistry.shared.attach(view, sessionId: id) }
+      Prop("fontSize") { (view: TermforgeTerminalNativeView, value: Double) -> Void in view.setFontSize(value) }
+      Prop("scrollback") { (view: TermforgeTerminalNativeView, value: Int) -> Void in view.setScrollback(value) }
+      Prop("foregroundColor") { (view: TermforgeTerminalNativeView, value: String) -> Void in view.setForegroundColor(value) }
+      Prop("backgroundColor") { (view: TermforgeTerminalNativeView, value: String) -> Void in view.setBackgroundColor(value) }
+    }
+
+    // Explicit return bypasses the inferred result builder. The public builder
+    // receives each actual definition; no arrays or nested modules are exported.
+    return ModuleDefinitionBuilder.buildBlock(
+      moduleName,
+      moduleEvents,
+      onCreate,
+      inspectHostKeyDefinition,
+      createSessionDefinition,
+      connectPasswordDefinition,
+      disconnectDefinition,
+      sendKeyDefinition,
+      sendTextDefinition,
+      pasteClipboardDefinition,
+      copyTextDefinition,
+      shareClipboardDefinition,
+      saveFileToFilesDefinition,
+      searchTerminalDefinition,
+      clearScrollbackDefinition,
+      importEd25519KeyDefinition,
+      generateEd25519KeyDefinition,
+      deleteKeyDefinition,
+      connectKeyDefinition,
+      connectPasswordViaJumpDefinition,
+      listDirectoryDefinition,
+      renameRemoteDefinition,
+      removeRemoteDefinition,
+      createRemoteDirectoryDefinition,
+      removeRemoteDirectoryDefinition,
+      downloadFileDefinition,
+      readTextDefinition,
+      writeTextDefinition,
+      uploadFileDefinition,
+      cancelTransfersDefinition,
+      startRemoteForwardDefinition,
+      startLocalForwardDefinition,
+      stopForwardDefinition,
+      terminalView
+    )
+  }
+
+  private func connectPassword(id: String, encodedOptions: String) async throws -> Void {
+    let options: PasswordConnectionOptions = try Self.decodeConnectionOptions(encodedOptions)
+    try await MainActor.run { try TermforgeSessionRegistry.shared.connect(id: id, host: options.host, port: options.port, username: options.username, password: options.password, hostKey: options.hostKey, columns: options.columns, rows: options.rows) }
+  }
+
+  private func connectPasswordViaJump(id: String, encodedOptions: String) async throws -> Void {
+    let options: JumpPasswordConnectionOptions = try Self.decodeConnectionOptions(encodedOptions)
+    try await MainActor.run { try TermforgeSessionRegistry.shared.connectPasswordViaJump(id: id, host: options.host, port: options.port, username: options.username, password: options.password, hostKey: options.hostKey, jumpHost: options.jumpHost, jumpPort: options.jumpPort, jumpUsername: options.jumpUsername, jumpPassword: options.jumpPassword, jumpHostKey: options.jumpHostKey, columns: options.columns, rows: options.rows) }
+  }
+
+  private func copyText(text: String) throws -> Void {
+    guard text.utf8.count <= 64 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Clipboard text is too large.") }
+    UIPasteboard.general.string = text
+  }
+
+  private func shareClipboard() throws -> Void {
+    guard let text = UIPasteboard.general.string, !text.isEmpty else {
+      throw Exception(name: "INVALID_CONFIG", description: "Copy terminal text before sharing it.")
+    }
+    guard text.utf8.count <= 64 * 1024 else {
+      throw Exception(name: "RESOURCE_LIMIT", description: "Clipboard text is too large to share.")
+    }
+    guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),
+          let presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+      throw Exception(name: "UNSUPPORTED", description: "The share sheet is unavailable right now.")
+    }
+    let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    presenter.present(controller, animated: true)
+  }
+
+  private func saveFileToFiles(url: URL) throws -> Void {
+    guard url.isFileURL, FileManager.default.fileExists(atPath: url.path) else {
+      throw Exception(name: "PATH_REJECTED", description: "The downloaded file is no longer available.")
+    }
+    guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),
+          let presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+      throw Exception(name: "UNSUPPORTED", description: "Files export is unavailable right now.")
+    }
+    let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+    presenter.present(picker, animated: true)
+  }
+
+  private func importEd25519Key(openSSH: String, passphrase: String, protection: String) throws -> [String: String] {
+    guard openSSH.utf8.count <= 64 * 1024 else { throw Exception(name: "KEY_TOO_LARGE", description: "Private key exceeds the 64 KiB import limit.") }
+    let key: Crypto.Curve25519.Signing.PrivateKey
+    do { key = try .init(sshEd25519: openSSH, decryptionKey: passphrase.isEmpty ? nil : Data(passphrase.utf8)) }
+    catch { throw Exception(name: "INVALID_KEY_OR_PASSPHRASE", description: "The Ed25519 key or passphrase is invalid.") }
+    let reference = UUID().uuidString.lowercased()
+    try self.storePrivateKey(key.rawRepresentation, reference: reference, protection: protection)
+    let publicKey = Self.openSSHPublicKey(key.publicKey.rawRepresentation)
+    return ["reference": reference, "algorithm": "ed25519", "publicKey": publicKey, "fingerprint": Self.fingerprint(publicKey), "protection": protection]
+  }
+
+  private func generateEd25519Key(protection: String) throws -> [String: String] {
+    let key = Crypto.Curve25519.Signing.PrivateKey()
+    let reference = UUID().uuidString.lowercased()
+    try self.storePrivateKey(key.rawRepresentation, reference: reference, protection: protection)
+    let publicKey = Self.openSSHPublicKey(key.publicKey.rawRepresentation)
+    return ["reference": reference, "algorithm": "ed25519", "publicKey": publicKey, "fingerprint": Self.fingerprint(publicKey), "protection": protection]
+  }
+
+  private func deleteKey(reference: String) throws -> Void {
+    let status = SecItemDelete([
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: self.keyService,
+      kSecAttrAccount as String: reference,
+      kSecAttrSynchronizable as String: false,
+    ] as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      throw Exception(name: "KEY_UNAVAILABLE", description: "The protected key could not be deleted.")
+    }
+  }
+
+  private func connectKey(id: String, encodedOptions: String) async throws -> Void {
+    let options: KeyConnectionOptions = try Self.decodeConnectionOptions(encodedOptions)
+    let raw = try self.loadPrivateKey(reference: options.reference, reason: options.reason)
+    let key = try Crypto.Curve25519.Signing.PrivateKey(rawRepresentation: raw)
+    try await MainActor.run { try TermforgeSessionRegistry.shared.connectKey(id: id, host: options.host, port: options.port, username: options.username, privateKey: key, hostKey: options.hostKey, columns: options.columns, rows: options.rows) }
+  }
+
+  private func listDirectory(id: String, path: String) async throws -> [[String: Any]] {
+    try Self.validateRemotePath(path)
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    return try await client.withSFTP { sftp in
+      let messages = try await sftp.listDirectory(atPath: path)
+      return messages.flatMap(\.components).filter { $0.filename != "." && $0.filename != ".." }.map { item in
+        ["name": item.filename, "longName": item.longname, "size": item.attributes.size.map { String($0) } ?? NSNull(), "permissions": item.attributes.permissions.map { String($0) } ?? NSNull(), "isDirectory": item.attributes.permissions.map { ($0 & 0o170000) == 0o040000 } ?? false]
+      }
+    }
+  }
+
+  private func renameRemote(id: String, sourcePath: String, destinationPath: String) async throws -> Void {
+    try Self.validateRemotePath(sourcePath); try Self.validateRemotePath(destinationPath)
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    try await client.withSFTP { sftp in try await sftp.rename(at: sourcePath, to: destinationPath) }
+  }
+
+  private func removeRemote(id: String, path: String) async throws -> Void {
+    try Self.validateRemotePath(path)
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    try await client.withSFTP { sftp in try await sftp.remove(at: path) }
+  }
+
+  private func createRemoteDirectory(id: String, path: String) async throws -> Void {
+    try Self.validateRemotePath(path)
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    try await client.withSFTP { sftp in try await sftp.createDirectory(atPath: path) }
+  }
+
+  private func removeRemoteDirectory(id: String, path: String) async throws -> Void {
+    try Self.validateRemotePath(path)
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    try await client.withSFTP { sftp in try await sftp.rmdir(at: path) }
+  }
+
+  private func readText(id: String, remotePath: String) async throws -> [String: String] {
+    try Self.validateRemotePath(remotePath)
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    return try await client.withSFTP { sftp in
+      try await sftp.withFile(filePath: remotePath, flags: .read) { file in
+        let size = try await file.readAttributes().size ?? 0
+        guard size <= 2 * 1024 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Editor files are limited to 2 MiB.") }
+        var bytes: [UInt8] = []; var offset: UInt64 = 0; var digest = CryptoKit.SHA256()
+        while offset < size { var chunk = try await file.read(from: offset, length: UInt32(min(64 * 1024, size - offset))); let data = Data(chunk.readableBytesView); bytes.append(contentsOf: data); digest.update(data: data); offset += UInt64(chunk.readableBytes) }
+        guard !bytes.contains(0), let text = String(bytes: bytes, encoding: .utf8) else { throw Exception(name: "INVALID_CONFIG", description: "The editor supports UTF-8 text files only.") }
+        return ["text": text, "fingerprint": digest.finalize().map { String(format: "%02x", $0) }.joined()]
+      }
+    }
+  }
+
+  private func writeText(id: String, remotePath: String, text: String, expectedFingerprint: String) async throws -> Void {
+    try Self.validateRemotePath(remotePath)
+    let data = Data(text.utf8)
+    guard data.count <= 2 * 1024 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Editor files are limited to 2 MiB.") }
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    let temporaryPath = remotePath + ".termforge-" + UUID().uuidString.lowercased()
+    do {
+      try await client.withSFTP { sftp in
+        var actual = CryptoKit.SHA256()
+        try await sftp.withFile(filePath: remotePath, flags: .read) { file in
+          let size = try await file.readAttributes().size ?? 0; var offset: UInt64 = 0
+          while offset < size { let chunk = try await file.read(from: offset, length: UInt32(min(64 * 1024, size - offset))); actual.update(data: Data(chunk.readableBytesView)); offset += UInt64(chunk.readableBytes) }
+        }
+        let actualFingerprint = actual.finalize().map { String(format: "%02x", $0) }.joined()
+        guard actualFingerprint == expectedFingerprint else { throw Exception(name: "CONFLICT", description: "The remote file changed after it was opened. Reload it before saving.") }
+        try await sftp.withFile(filePath: temporaryPath, flags: [.write, .create, .truncate]) { file in
+          try await file.write(ByteBuffer(data: data), at: 0)
+        }
+        try? await sftp.remove(at: remotePath)
+        try await sftp.rename(at: temporaryPath, to: remotePath)
+      }
+    } catch {
+      try? await client.withSFTP { sftp in try? await sftp.remove(at: temporaryPath) }
+      throw error
+    }
+  }
+
+  private static func inspectHostKey(host: String, port: Int) async throws -> [String: String] {
+    let validator = CapturingHostKeyValidator()
+    var settings = SSHClientSettings(
+      host: host,
+      port: port,
+      authenticationMethod: { SSHAuthenticationMethod.passwordBased(username: "host-key-inspection", password: "unused") },
+      hostKeyValidator: .custom(validator)
+    )
+    settings.connectTimeout = .seconds(10)
+    do { _ = try await SSHClient.connect(to: settings) } catch { }
+    guard let key = validator.captured else { throw Exception(name: "HOST_KEY_UNAVAILABLE", description: "The server did not provide a host key.") }
+    let parts = key.split(separator: " ", maxSplits: 1).map(String.init)
+    guard parts.count == 2, let data = Data(base64Encoded: parts[1]) else { throw Exception(name: "INVALID_HOST_KEY", description: "The server returned an invalid host key.") }
+    let digest = CryptoKit.SHA256.hash(data: data)
+    return ["algorithm": parts[0], "key": key, "fingerprint": "SHA256:" + Data(digest).base64EncodedString().replacingOccurrences(of: "=", with: "")]
+  }
+
+  private func startLocalForward(id: String, localPort: Int, remoteHost: String, remotePort: Int) async throws -> String {
+    guard (1...65535).contains(localPort), (1...65535).contains(remotePort), !remoteHost.isEmpty else { throw Exception(name: "INVALID_FORWARD", description: "Forward endpoints are invalid.") }
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    let bootstrap = ServerBootstrap(group: client.eventLoop).serverChannelOption(ChannelOptions.backlog, value: 16).childChannelInitializer { localChannel in
+      localChannel.eventLoop.makeFutureWithTask {
+        let origin = try localChannel.remoteAddress ?? SocketAddress(ipAddress: "127.0.0.1", port: 0)
+        let sshChannel = try await client.createDirectTCPIPChannel(using: .init(targetHost: remoteHost, targetPort: remotePort, originatorAddress: origin)) { $0.eventLoop.makeSucceededVoidFuture() }
+        let (localGlue, sshGlue) = TermforgeGlueHandler.matchedPair()
+        try await localChannel.pipeline.addHandler(localGlue).get()
+        try await sshChannel.pipeline.addHandler(sshGlue).get()
+      }
+    }
+    let listener = try await bootstrap.bind(host: "127.0.0.1", port: localPort).get()
+    let forwardId = UUID().uuidString.lowercased()
+    await MainActor.run { TermforgeSessionRegistry.shared.registerLocalForward(id: id, forwardId: forwardId, channel: listener) }
+    return forwardId
+  }
+
+  private func downloadFile(id: String, remotePath: String) async throws -> [String: String] {
+    try Self.validateRemotePath(remotePath)
+    await TransferCancellationRegistry.shared.begin(id)
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    let destination = FileManager.default.temporaryDirectory.appendingPathComponent("termforge-\(UUID().uuidString).download")
+    FileManager.default.createFile(atPath: destination.path, contents: nil)
+    do {
+      return try await client.withSFTP { sftp in
+        try await sftp.withFile(filePath: remotePath, flags: .read) { file in
+          let total = try await file.readAttributes().size ?? 0
+          guard total <= 256 * 1024 * 1024 else { throw Exception(name: "FILE_TOO_LARGE", description: "Downloads are limited to 256 MiB.") }
+          let output = try FileHandle(forWritingTo: destination)
+          defer { try? output.close() }
+          var offset: UInt64 = 0
+          var digest = CryptoKit.SHA256()
+          while true {
+            try Task.checkCancellation()
+            try await TransferCancellationRegistry.shared.check(id)
+            let chunk = try await file.read(from: offset, length: 64 * 1024)
+            guard chunk.readableBytes > 0 else { break }
+            let data = Data(chunk.readableBytesView)
+            try output.write(contentsOf: data)
+            digest.update(data: data)
+            offset += UInt64(data.count)
+            await MainActor.run { TermforgeSessionRegistry.shared.progress(id: id, remotePath: remotePath, bytes: offset, total: total) }
+          }
+          return ["url": destination.absoluteString, "bytes": String(offset), "sha256": digest.finalize().map { String(format: "%02x", $0) }.joined()]
+        }
+      }
+    } catch {
+      try? FileManager.default.removeItem(at: destination)
+      throw error
+    }
+  }
+
+  private func uploadFile(id: String, localURL: URL, remotePath: String, overwrite: Bool) async throws -> [String: String] {
+    try Self.validateRemotePath(remotePath)
+    await TransferCancellationRegistry.shared.begin(id)
+    guard localURL.isFileURL else { throw Exception(name: "INVALID_LOCAL_URL", description: "Only an authorized local file URL may be uploaded.") }
+    let scoped = localURL.startAccessingSecurityScopedResource()
+    defer { if scoped { localURL.stopAccessingSecurityScopedResource() } }
+    let values = try localURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+    guard values.isRegularFile == true else { throw Exception(name: "INVALID_LOCAL_FILE", description: "The selected URL is not a regular file.") }
+    let total = UInt64(values.fileSize ?? 0)
+    guard total <= 256 * 1024 * 1024 else { throw Exception(name: "FILE_TOO_LARGE", description: "Uploads are limited to 256 MiB.") }
+    let client = try await MainActor.run { try TermforgeSessionRegistry.shared.client(id: id) }
+    let temporaryPath = remotePath + ".termforge-" + UUID().uuidString.lowercased()
+    do {
+      let uploaded = try await client.withSFTP { sftp in
+        let input = try FileHandle(forReadingFrom: localURL)
+        defer { try? input.close() }
+        var offset: UInt64 = 0
+        var digest = CryptoKit.SHA256()
+        try await sftp.withFile(filePath: temporaryPath, flags: [.write, .create, .truncate]) { file in
+          while true {
+            try Task.checkCancellation()
+            try await TransferCancellationRegistry.shared.check(id)
+            let data = try input.read(upToCount: 64 * 1024) ?? Data()
+            guard !data.isEmpty else { break }
+            digest.update(data: data)
+            try await file.write(ByteBuffer(data: data), at: offset)
+            offset += UInt64(data.count)
+            await MainActor.run { TermforgeSessionRegistry.shared.progress(id: id, remotePath: remotePath, bytes: offset, total: total) }
+          }
+        }
+        if overwrite { try? await sftp.remove(at: remotePath) }
+        try await sftp.rename(at: temporaryPath, to: remotePath)
+        return (offset, digest.finalize().map { String(format: "%02x", $0) }.joined())
+      }
+      return ["bytes": String(uploaded.0), "sha256": uploaded.1]
+    } catch {
+      try? await client.withSFTP { sftp in try? await sftp.remove(at: temporaryPath) }
+      throw error
+    }
+  }
+
+  private static func decodeConnectionOptions<T: Decodable>(_ encodedOptions: String) throws -> T {
+    guard encodedOptions.utf8.count <= 16 * 1024, let data = encodedOptions.data(using: .utf8) else {
+      throw Exception(name: "INVALID_CONFIG", description: "Connection options are invalid.")
+    }
+    do {
+      return try JSONDecoder().decode(T.self, from: data)
+    } catch {
+      throw Exception(name: "INVALID_CONFIG", description: "Connection options are invalid.")
     }
   }
 

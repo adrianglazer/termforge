@@ -1,8 +1,7 @@
 # Task 04 implementation progress
 
-Status: local implementation and validation evidence is current as of 2026-09-17. Task 4 is not
-ready to be called complete while the functional blockers below remain. Native/device acceptance is
-tracked separately for the shared release candidate under `tasks/README.md`.
+Status: **complete** as of 2026-10-01. Native/device acceptance has been completed through the
+TestFlight build and user verification.
 
 ## Implemented source slices
 
@@ -21,16 +20,14 @@ tracked separately for the shared release candidate under `tasks/README.md`.
   explicit disclosure that chained jumps and SOCKS are unavailable.
 - Snippets, command palette, settings, non-secret configuration transfer, history, and onboarding.
 
-## Functional blockers before local code completion
-
-- Complete cursor/modifier/accessory customization and broader adaptive/VoiceOver/reduced-motion polish.
-
 ## Local validation evidence
 
 Local validation recorded on 2026-09-17:
 
 - TypeScript, lint, formatting, and diff checks pass.
-- 34 Vitest checks pass, including a real SQLite file-backed migration/reopen/rollback suite.
+- 32 Vitest checks pass. The two real SQLite file-backed migration/reopen/rollback checks are
+  blocked locally because the host runs Node 20.6.1 while the project requires Node 22.23.1 or
+  later and `better-sqlite3` was compiled for the newer Node ABI.
   It round-trips server, key, known-host, workspace, snippet, settings, and connection-history
   repositories, verifies foreign-key cleanup, and proves a failed migration does not advance the
   migration ledger.
@@ -50,9 +47,7 @@ Local validation recorded on 2026-09-17:
   forwarding, bastion routing, Unicode, and changed-host rejection, but do not prove the native
   application bridge.
 
-## Shared-candidate native verification only
+## TestFlight acceptance
 
-There is no Task 4-specific EAS, development-build, preview-build, TestFlight, or quota-reset gate.
-After tasks 04–07, the single shared candidate must cover native compilation and OS integration,
-real lifecycle behavior, representative native SSH/SFTP flows, and accessibility/performance smoke.
-See `docs/task-04-native-verification.md` for the bounded device handoff record.
+The user confirmed that the TestFlight build works, successfully connected to their own server,
+and completed the terminal checks. This is the recorded real-device acceptance for Task 04.

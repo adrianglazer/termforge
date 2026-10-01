@@ -1,6 +1,6 @@
 # Task 04 native verification record
 
-Date: 2026-09-17
+Date: 2026-10-01
 
 ## Local evidence
 
@@ -15,7 +15,12 @@ Date: 2026-09-17
   Keychain, UIKit terminal rendering, Citadel calls, Files/share permissions, and actual native
   transfer cancellation cannot be established here.
 
-## Shared candidate/device milestone
+## TestFlight/device acceptance
+
+The user verified the TestFlight build, connected successfully to their server, and completed the
+terminal checks. Task 04's real-device terminal acceptance is complete.
+
+## Historical shared candidate/device checklist
 
 Per `tasks/README.md`, these are pending for the single shared release-candidate session after
 tasks 04–07. They are not EAS Task 4 completion criteria and must not trigger a task-specific

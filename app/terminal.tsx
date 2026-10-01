@@ -312,41 +312,47 @@ export default function TerminalScreen() {
       if (form.useJump && jumpHostKey) {
         await TermforgeNative.connectPasswordViaJump(
           id,
-          form.host.trim(),
-          Number(form.port),
-          form.username,
-          form.password,
-          hostKey.key,
-          form.jumpHost.trim(),
-          Number(form.jumpPort),
-          form.jumpUsername,
-          form.jumpPassword,
-          jumpHostKey.key,
-          80,
-          24,
+          JSON.stringify({
+            host: form.host.trim(),
+            port: Number(form.port),
+            username: form.username,
+            password: form.password,
+            hostKey: hostKey.key,
+            jumpHost: form.jumpHost.trim(),
+            jumpPort: Number(form.jumpPort),
+            jumpUsername: form.jumpUsername,
+            jumpPassword: form.jumpPassword,
+            jumpHostKey: jumpHostKey.key,
+            columns: 80,
+            rows: 24,
+          }),
         );
       } else if (authentication === 'key' && importedKey) {
         await TermforgeNative.connectKey(
           id,
-          form.host.trim(),
-          Number(form.port),
-          form.username,
-          importedKey.reference,
-          'Authenticate to use this SSH key.',
-          hostKey.key,
-          80,
-          24,
+          JSON.stringify({
+            host: form.host.trim(),
+            port: Number(form.port),
+            username: form.username,
+            reference: importedKey.reference,
+            reason: 'Authenticate to use this SSH key.',
+            hostKey: hostKey.key,
+            columns: 80,
+            rows: 24,
+          }),
         );
       } else {
         await TermforgeNative.connectPassword(
           id,
-          form.host.trim(),
-          Number(form.port),
-          form.username,
-          form.password,
-          hostKey.key,
-          80,
-          24,
+          JSON.stringify({
+            host: form.host.trim(),
+            port: Number(form.port),
+            username: form.username,
+            password: form.password,
+            hostKey: hostKey.key,
+            columns: 80,
+            rows: 24,
+          }),
         );
       }
     } catch (caught) {
