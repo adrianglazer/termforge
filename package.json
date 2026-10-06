@@ -11,11 +11,20 @@
     "start": "expo start --dev-client",
     "ios": "expo run:ios",
     "lint": "eslint . --max-warnings=0",
-    "format": "prettier --check app src tests package.json app.json eas.json tsconfig.json eslint.config.js vitest.config.ts docs/development.md tasks/02-gpt-5.6-terra-foundation.md",
-    "format:write": "prettier --write app src tests package.json app.json eas.json tsconfig.json eslint.config.js vitest.config.ts docs/development.md tasks/02-gpt-5.6-terra-foundation.md",
+    "format": "prettier --check app src tests package.json app.json eas.json tsconfig.json eslint.config.js vitest.config.ts docs/development.md tasks/02-gpt-5.6-terra-foundation.md && npm run format:release",
+    "format:write": "prettier --write app src tests package.json app.json eas.json tsconfig.json eslint.config.js vitest.config.ts docs/development.md tasks/02-gpt-5.6-terra-foundation.md README.md .github/workflows/ci.yml scripts/release-*.js docs/eas.md docs/testing.md docs/troubleshooting.md docs/app-store.md docs/release-checklist.md tasks/08-gpt-5.6-luna-release-preparation.md",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eas-build-post-install": "node ./scripts/verify-native-security.js && node ./scripts/release-notices.js --require-pods",
+    "build:development": "eas build --platform ios --profile development",
+    "build:preview": "eas build --platform ios --profile preview",
+    "build:candidate": "bash ./scripts/eas-release.sh candidate",
+    "submit:testflight": "bash ./scripts/eas-release.sh testflight",
+    "release:verify": "node ./scripts/release-verify.js",
+    "release:source": "node ./scripts/release-source.js",
+    "release:check": "npm test && npm run lint && npm run typecheck && npm run format && npm run release:verify && git diff --check",
+    "format:release": "prettier --check README.md .github/workflows/ci.yml scripts/release-*.js scripts/eas-release.sh docs/eas.md docs/testing.md docs/troubleshooting.md docs/app-store.md docs/release-checklist.md tasks/08-gpt-5.6-luna-release-preparation.md --ignore-unknown"
   },
   "dependencies": {
     "expo": "~57.0.26",

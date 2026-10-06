@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { safeError } from '@/application/errors';
+import { TermforgeNative } from '@/native/termforgeNative';
 import { ScreenShell } from '@/components/ScreenShell';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { ServerRepository } from '@/servers/repository';
@@ -42,12 +44,16 @@ export default function ConfigurationScreen() {
   }, [create]);
   async function importConfiguration() {
     try {
+      if (new TextEncoder().encode(importText).byteLength > 1_000_000) {
+        setError('Configuration is too large.');
+        return;
+      }
       const parsed = parseImport(JSON.parse(importText));
       const database = await openMetadataDatabase();
-      await database.withTransactionAsync(async () => {
-        const servers = new ServerRepository(database);
-        const snippets = new SnippetRepository(database);
-        const workspaces = new WorkspaceRepository(database);
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const servers = new ServerRepository(transaction);
+        const snippets = new SnippetRepository(transaction);
+        const workspaces = new WorkspaceRepository(transaction);
         for (const source of parsed.servers) {
           const now = new Date().toISOString();
           const server = {
@@ -64,21 +70,22 @@ export default function ConfigurationScreen() {
         }
         for (const snippet of parsed.snippets) await snippets.save(snippet);
         for (const workspace of parsed.workspaces) await workspaces.save(workspace);
-        const current = await new SettingsRepository(database).get();
-        await new SettingsRepository(database).save({
+        const current = await new SettingsRepository(transaction).get();
+        await new SettingsRepository(transaction).save({
           ...current,
           theme: parsed.settings.theme,
           autoLockMinutes: parsed.settings.autoLockMinutes,
           updatedAt: new Date().toISOString(),
         });
       });
+      await TermforgeNative.setAutoLockMinutes(parsed.settings.autoLockMinutes);
       setMessage(
         'Configuration imported. Imported server profiles require credential or key rebinding before use.',
       );
       setError(undefined);
       await create();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Configuration could not be imported.');
+      setError(safeError(caught).safeMessage);
     }
   }
   return (
@@ -101,6 +108,7 @@ export default function ConfigurationScreen() {
           value={importText}
           onChangeText={setImportText}
           multiline
+          maxLength={1_000_000}
           autoCapitalize="none"
           autoCorrect={false}
           placeholder="Paste a Termforge configuration export"

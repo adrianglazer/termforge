@@ -5,11 +5,8 @@ import UIKit
 @MainActor
 internal final class TermforgeTerminalNativeView: ExpoView, TerminalViewDelegate {
   internal var sessionId: String?
-  private let terminal = TerminalView(
-    frame: .zero,
-    font: UIFont.monospacedSystemFont(ofSize: 14, weight: .regular),
-    options: TerminalOptions(scrollback: 10_000)
-  )
+  private var outputGate = TermforgeOutputGate()
+  private var terminal = TermforgeTerminalNativeView.makeTerminal()
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -25,7 +22,47 @@ internal final class TermforgeTerminalNativeView: ExpoView, TerminalViewDelegate
     terminal.frame = bounds
   }
 
-  internal func feed(_ bytes: [UInt8]) { terminal.feed(byteArray: bytes[...]) }
+  private static func makeTerminal() -> TerminalView {
+    TerminalView.textInputDebugEnabled = false
+    let view = TermforgeInteractiveTerminalView(
+      frame: .zero,
+      font: UIFont.monospacedSystemFont(ofSize: 14, weight: .regular),
+      options: TerminalOptions(scrollback: 10_000)
+    )
+    view.getTerminal().silentLog = true
+    return view
+  }
+
+  internal func adoptTerminal(from previous: TermforgeTerminalNativeView) {
+    terminal.removeFromSuperview()
+    previous.terminal.removeFromSuperview()
+    let adopted = previous.terminal
+    outputGate = previous.outputGate
+    previous.outputGate = TermforgeOutputGate()
+    previous.terminal = Self.makeTerminal()
+    previous.terminal.backgroundColor = .black
+    previous.terminal.terminalDelegate = previous
+    previous.addSubview(previous.terminal)
+    terminal = adopted
+    terminal.terminalDelegate = self
+    addSubview(terminal)
+    setNeedsLayout()
+  }
+
+  internal func resetTerminal() {
+    outputGate = TermforgeOutputGate()
+    terminal.removeFromSuperview()
+    terminal = Self.makeTerminal()
+    terminal.backgroundColor = .black
+    terminal.terminalDelegate = self
+    addSubview(terminal)
+    setNeedsLayout()
+  }
+
+  internal func feed(_ bytes: [UInt8]) {
+    let admitted = outputGate.filter(bytes)
+    if !admitted.isEmpty { terminal.feed(byteArray: admitted[...]) }
+  }
 
   internal func sendSemanticKey(_ key: String) throws {
     let bytes: [UInt8]
@@ -50,7 +87,7 @@ internal final class TermforgeTerminalNativeView: ExpoView, TerminalViewDelegate
     case "f10": bytes = Array("\u{1b}[21~".utf8)
     case "f11": bytes = Array("\u{1b}[23~".utf8)
     case "f12": bytes = Array("\u{1b}[24~".utf8)
-    default: throw Exception(name: "INVALID_KEY", description: "Unsupported terminal key.")
+    default: throw Exception(name: "INVALID_CONFIG", description: "Unsupported terminal key.")
     }
     terminal.send(data: bytes[...])
   }
@@ -91,12 +128,10 @@ internal final class TermforgeTerminalNativeView: ExpoView, TerminalViewDelegate
     guard let sessionId else { return }
     TermforgeSessionRegistry.shared.bell(id: sessionId)
   }
-  func clipboardCopy(source: TerminalView, content: Data) {
-    UIPasteboard.general.string = String(data: content, encoding: .utf8)
-  }
-  func clipboardRead(source: TerminalView) -> Data? {
-    UIPasteboard.general.string?.data(using: .utf8)
-  }
+  // Remote OSC clipboard requests are intentionally inert. Clipboard access is
+  // available only through explicit user actions exposed by the app.
+  func clipboardCopy(source: TerminalView, content: Data) {}
+  func clipboardRead(source: TerminalView) -> Data? { nil }
   func iTermContent(source: TerminalView, content: ArraySlice<UInt8>) {}
   func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 }
@@ -106,5 +141,24 @@ private extension UIColor {
     let clean = value.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
     guard clean.count == 6, let number = UInt64(clean, radix: 16) else { return nil }
     self.init(red: CGFloat((number >> 16) & 0xff) / 255, green: CGFloat((number >> 8) & 0xff) / 255, blue: CGFloat(number & 0xff) / 255, alpha: 1)
+  }
+}
+
+@MainActor
+private final class TermforgeInteractiveTerminalView: TerminalView {
+  override func insertText(_ text: String) {
+    guard !TermforgeAppLock.shared.locked else { return }
+    TermforgeAppLock.shared.recordActivity()
+    super.insertText(text)
+  }
+  override func deleteBackward() {
+    guard !TermforgeAppLock.shared.locked else { return }
+    TermforgeAppLock.shared.recordActivity()
+    super.deleteBackward()
+  }
+  override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    guard !TermforgeAppLock.shared.locked else { return }
+    TermforgeAppLock.shared.recordActivity()
+    super.pressesBegan(presses, with: event)
   }
 }

@@ -1,29 +1,47 @@
 # Termforge
 
-Termforge is a privacy-first terminal workstation for iPhone. Built with Expo, React Native, TypeScript, and custom iOS native modules, it is intended to provide real interactive SSH terminals, Terminator-style panes, persistent workspaces, secure SSH-key management, SFTP, port forwarding, snippets, and developer-oriented tools.
-
-It is not a local Linux distribution or a simple SSH launcher: commands run on user-controlled remote hosts, while the app provides the terminal, connection, file-management, and security experience on iOS.
+Termforge is a terminal workstation for iPhone, built with Expo, React Native,
+TypeScript and custom Swift modules. Commands run on your remote SSH hosts.
+The app has split-pane workspaces, SFTP and a small text editor, snippets,
+local/remote TCP forwarding, password and Ed25519 authentication, and a
+single password-authenticated bastion hop. Metadata stays in local SQLite;
+credentials use iOS Keychain and native secure prompts. There is no app account,
+backend, analytics or production mock connection path.
 
 ## Status
 
-The project is in the planning/foundation stage. See [the implementation plan](docs/implementation-plan.md) and [the product requirements](instructions.md).
+Tasks 05–07 local testing, hardening and security remediation are complete.
+Task 08 release scripts, CI and documentation are implemented. Production
+candidate 0.1.0/build 4 passed Apple compilation and signed archive inspection;
+its TestFlight distribution status is recorded in task 08. Physical-iPhone
+acceptance and final owner/store inputs remain pending. See [testing evidence](docs/testing.md),
+[security boundaries](docs/security.md) and the [release checklist](docs/release-checklist.md).
 
-## Planned stack
+RSA/ECDSA private keys, keyboard-interactive/MFA, SOCKS, multiple or key-authenticated
+bastion hops, agent/X11 forwarding and private-key export are unavailable. Imported
+encrypted Ed25519 keys prompt on use; generated keys are not passphrase-encrypted
+or Secure Enclave keys. iPhone/iOS 17+ is the target; iPad is not advertised.
 
-- Expo development builds with React Native and strict TypeScript
-- Swift-based Expo Modules for iOS-native terminal, SSH, SFTP, and secure-storage capabilities
-- SQLite for non-secret local metadata and iOS Keychain for credentials and private keys
-- EAS Build for all iOS compilation, internal development builds for native iteration, and EAS Submit/TestFlight for acceptance and release testing
+## Development
 
-Expo Go is not supported because Termforge requires custom native functionality.
-
-## Intended development workflow
-
-Once the foundation is in place:
+Use Node 22.23.1+ (validated with 24.4.1). pnpm is the repository preference;
+this checkout has an npm lockfile and uses npm for reproducible CI/EAS installs.
 
 ```sh
-npm install
-npx expo start --dev-client
+npm ci
+npm run release:check
+npm start
 ```
 
-An EAS-built iOS development client will be required before running native terminal and SSH features. Local Xcode is not part of the required workflow. Apple Developer/App Store Connect access, registered test devices, and the final bundle identifier are deliberately not stored in this repository. Internal EAS builds are used for rapid native testing; signed store-distribution builds are tested through TestFlight.
+`npm start` needs an installed compatible native development client. Expo Go
+cannot load the Swift modules. Linux is the primary workstation; EAS performs
+signed iOS builds in the cloud. Local Xcode is optional. Follow
+[development](docs/development.md) and [EAS](docs/eas.md) before requesting a build.
+The consolidated production candidate is build 4; use that same artifact for
+TestFlight and the compact iPhone acceptance session. CI runs local checks only. Public App Store review is an explicit
+owner action after acceptance and store materials are complete.
+
+See [troubleshooting](docs/troubleshooting.md), [App Store material draft](docs/app-store.md),
+[dependency advisories](docs/dependency-security-review.md) and
+[product requirements](instructions.md). Remaining dependency advisories have
+reachability assessments; the audit is not clean.

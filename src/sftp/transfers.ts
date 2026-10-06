@@ -1,6 +1,7 @@
 export type TransferState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type TransferRecord = {
   id: string;
+  sessionId: string;
   direction: 'upload' | 'download';
   remotePath: string;
   state: TransferState;

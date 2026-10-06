@@ -3,9 +3,11 @@ import type { ViewProps } from 'react-native';
 
 type EventSubscription = { remove(): void };
 
-export type HostKey = { algorithm: string; key: string; fingerprint: string };
+export type HostKey = { algorithm: string; key: string; fingerprint: string; challengeId?: string };
 export type SessionState = {
   sessionId: string;
+  generation: number;
+  sequence: number;
   state: 'created' | 'connecting' | 'reconnecting' | 'connected' | 'ready' | 'closed' | 'failed';
   message?: string;
   code?: string;
@@ -20,12 +22,37 @@ export type RemoteEntry = {
 };
 export type TransferProgress = {
   sessionId: string;
+  operationId: string;
+  generation: number;
+  sequence: number;
   remotePath: string;
   bytes: string;
   total: string;
 };
 
+export type SecurityState = { locked: boolean; revision: number };
+
 type NativeApi = {
+  credentialStates(references: string[]): Promise<Record<string, string>>;
+  orphanedKeys(references: string[]): Promise<string[]>;
+  reassociateKey(reference: string): Promise<void>;
+  securityState(): Promise<SecurityState>;
+  setAutoLockMinutes(minutes: number): Promise<void>;
+  addListener(
+    event: 'onSecurityState',
+    listener: (event: SecurityState) => void,
+  ): EventSubscription;
+  prepareMetadataStorage(): Promise<string>;
+  pickLocalFile(kind: 'key' | 'upload'): Promise<{ handle: string; name: string; bytes: string }>;
+  discardLocalFile(handle: string): Promise<void>;
+  inspectHostKeyThroughJump(
+    host: string,
+    port: number,
+    jumpHost: string,
+    jumpPort: number,
+    username: string,
+    challengeId: string,
+  ): Promise<[HostKey, HostKey]>;
   inspectHostKey(host: string, port: number): Promise<HostKey>;
   createSession(): Promise<string>;
   connectPassword(id: string, options: string): Promise<void>;
@@ -58,7 +85,7 @@ type NativeApi = {
   pasteClipboard(id: string): Promise<void>;
   copyText(text: string): Promise<void>;
   shareClipboard(): Promise<void>;
-  saveFileToFiles(url: string): Promise<void>;
+  saveFileToFiles(handle: string): Promise<void>;
   searchTerminal(
     id: string,
     term: string,
@@ -67,8 +94,7 @@ type NativeApi = {
   ): Promise<{ index: number; total: number }>;
   clearScrollback(id: string): Promise<void>;
   importEd25519Key(
-    openSSH: string,
-    passphrase: string,
+    handle: string,
     protection: 'userPresence' | 'biometryCurrentSet',
   ): Promise<{
     reference: string;
@@ -94,6 +120,7 @@ type NativeApi = {
   removeRemoteDirectory(id: string, path: string): Promise<void>;
   downloadFile(
     id: string,
+    operationId: string,
     remotePath: string,
   ): Promise<{ url: string; bytes: string; sha256: string }>;
   readText(id: string, remotePath: string): Promise<{ text: string; fingerprint: string }>;
@@ -102,14 +129,15 @@ type NativeApi = {
     remotePath: string,
     text: string,
     expectedFingerprint: string,
-  ): Promise<void>;
+  ): Promise<{ fingerprint: string }>;
   uploadFile(
     id: string,
-    localURL: string,
+    operationId: string,
+    localHandle: string,
     remotePath: string,
     overwrite: boolean,
   ): Promise<{ bytes: string; sha256: string }>;
-  cancelTransfers(id: string): Promise<void>;
+  cancelTransfer(id: string, operationId: string): Promise<void>;
   startRemoteForward(
     id: string,
     remotePort: number,

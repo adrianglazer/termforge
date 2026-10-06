@@ -1,3 +1,4 @@
+import { AppError } from '@/application/errors';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { KnownHost } from '@/types/domain';
@@ -44,11 +45,13 @@ export class KnownHostRepository {
   }
 
   async save(host: Omit<KnownHost, 'id'>): Promise<void> {
-    await this.database.runAsync(
+    const result = await this.database.runAsync(
       `INSERT INTO known_hosts (id, host, port, algorithm, public_key, fingerprint, approved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(host, port, algorithm) DO UPDATE SET
-         public_key = excluded.public_key, fingerprint = excluded.fingerprint, approved_at = excluded.approved_at`,
+       SELECT ?, ?, ?, ?, ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM known_hosts WHERE host = ? AND port = ?
+         AND (algorithm != ? OR public_key != ?))
+       ON CONFLICT(host, port, algorithm) DO UPDATE SET approved_at = excluded.approved_at
+       WHERE known_hosts.public_key = excluded.public_key`,
       `host-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       normalizeHost(host.host),
       host.port,
@@ -56,7 +59,16 @@ export class KnownHostRepository {
       host.publicKey,
       host.fingerprint,
       host.approvedAt,
+      normalizeHost(host.host),
+      host.port,
+      host.algorithm,
+      host.publicKey,
     );
+    if (result.changes !== 1)
+      throw new AppError(
+        'HOST_KEY_CHANGED',
+        'The saved server identity changed. Review it in Known hosts.',
+      );
   }
 
   async remove(id: string): Promise<void> {

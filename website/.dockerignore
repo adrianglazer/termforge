@@ -1,0 +1,12 @@
+# Only the files served by this website and its server configuration enter the build.
+**
+!Dockerfile
+!.dockerignore
+!nginx.conf
+!index.html
+!support.html
+!privacy.html
+!terms.html
+!styles.css
+!assets/
+!assets/**

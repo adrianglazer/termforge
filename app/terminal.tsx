@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams } from 'expo-router';
 import {
   Alert,
@@ -19,7 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenShell } from '@/components/ScreenShell';
 import { KeyRepository } from '@/keys/repository';
 import { KnownHostRepository } from '@/known-hosts/repository';
-import { decideHostTrust } from '@/known-hosts/trust';
+import { checkEndpointTrust, trustEndpointId } from '@/known-hosts/trust';
+import { safeError } from '@/application/errors';
 import { ConnectionHistoryRepository } from '@/history/repository';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import {
@@ -40,24 +40,20 @@ type Form = {
   host: string;
   port: string;
   username: string;
-  password: string;
   useJump: boolean;
   jumpHost: string;
   jumpPort: string;
   jumpUsername: string;
-  jumpPassword: string;
 };
 type ImportedKey = Awaited<ReturnType<typeof TermforgeNative.importEd25519Key>>;
 const initialForm: Form = {
   host: '',
   port: '2222',
   username: 'termforge',
-  password: 'test',
   useJump: false,
   jumpHost: '',
   jumpPort: '22',
   jumpUsername: '',
-  jumpPassword: '',
 };
 const terminalThemes = [
   { name: 'Default Dark', foreground: '#e5e7eb', background: '#000000' },
@@ -77,13 +73,18 @@ export default function TerminalScreen() {
     snippet?: string;
   }>();
   const [form, setForm] = useState(initialForm);
+  const latestEndpoint = useRef('');
+  latestEndpoint.current = trustEndpointId(form);
+  const inspectedEndpoint = useRef<string | undefined>(undefined);
+  const inspectionSequence = useRef(0);
+  const inspecting = useRef(false);
+  const connecting = useRef(false);
   const [hostKey, setHostKey] = useState<HostKey>();
   const [jumpHostKey, setJumpHostKey] = useState<HostKey>();
   const [sessionId, setSessionId] = useState<string>();
   const [state, setState] = useState<SessionState['state']>('closed');
   const [error, setError] = useState<string>();
   const [authentication, setAuthentication] = useState<'password' | 'key'>('password');
-  const [keyPassphrase, setKeyPassphrase] = useState('');
   const [importedKey, setImportedKey] = useState<ImportedKey>();
   const [showFiles, setShowFiles] = useState(false);
   const [remotePath, setRemotePath] = useState('/home/termforge');
@@ -143,6 +144,10 @@ export default function TerminalScreen() {
 
   useEffect(() => {
     if (!serverId) return;
+    setImportedKey(undefined);
+    setHostKey(undefined);
+    setJumpHostKey(undefined);
+    inspectedEndpoint.current = undefined;
     void (async () => {
       try {
         const database = await openMetadataDatabase();
@@ -155,26 +160,30 @@ export default function TerminalScreen() {
           host: server.host,
           port: String(server.port),
           username: server.username,
-          password: '',
-          useJump: false,
+          useJump: Boolean(server.jumpServerId),
           jumpHost: '',
           jumpPort: '22',
           jumpUsername: '',
-          jumpPassword: '',
         });
         setProfileServerId(server.id);
-        setAuthentication(server.authMethod === 'key' ? 'key' : 'password');
+        if (server.authMethod !== 'key' && server.authMethod !== 'password') {
+          setError('This profile uses an unsupported authentication method.');
+          return;
+        }
+        setAuthentication(server.authMethod);
         if (server.jumpServerId) {
           const jump = await new ServerRepository(database).get(server.jumpServerId);
-          if (jump)
-            setForm((current) => ({
-              ...current,
-              useJump: true,
-              jumpHost: jump.host,
-              jumpPort: String(jump.port),
-              jumpUsername: jump.username,
-              jumpPassword: '',
-            }));
+          if (!jump || jump.authMethod !== 'password' || jump.jumpServerId) {
+            setError('This profile requires an available password-authenticated single jump host.');
+            return;
+          }
+          setForm((current) => ({
+            ...current,
+            useJump: true,
+            jumpHost: jump.host,
+            jumpPort: String(jump.port),
+            jumpUsername: jump.username,
+          }));
         }
         if (server.authMethod === 'key') {
           const key = server.keyId
@@ -209,7 +218,7 @@ export default function TerminalScreen() {
 
   useEffect(() => {
     const subscription = TermforgeNative.addListener('onSessionState', (event) => {
-      if (!sessionId || event.sessionId === sessionId) {
+      if (sessionId && event.sessionId === sessionId) {
         setState(event.state);
         setError(event.state === 'failed' ? (event.message ?? 'Connection failed.') : undefined);
       }
@@ -238,38 +247,76 @@ export default function TerminalScreen() {
   }, [paneId, profileServerId, sessionId]);
 
   async function inspect() {
+    if (inspecting.current) return;
+    inspecting.current = true;
     setError(undefined);
+    setHostKey(undefined);
+    setJumpHostKey(undefined);
+    inspectedEndpoint.current = undefined;
+    const endpoint = trustEndpointId(form);
+    const sequence = ++inspectionSequence.current;
     try {
-      const inspected = await TermforgeNative.inspectHostKey(form.host.trim(), Number(form.port));
-      const inspectedJump = form.useJump
-        ? await TermforgeNative.inspectHostKey(form.jumpHost.trim(), Number(form.jumpPort))
-        : undefined;
       const database = await openMetadataDatabase();
-      const knownHost = await new KnownHostRepository(database).get(
-        form.host,
-        Number(form.port),
-        inspected.algorithm,
-      );
-      const trust = decideHostTrust(knownHost, inspected);
-      if (trust.status === 'changed') {
-        setHostKey(undefined);
-        setError(
-          `Host key changed. Expected ${trust.knownHost.fingerprint}; received ${inspected.fingerprint}. Review the server identity in Known hosts before connecting.`,
+      const known = await new KnownHostRepository(database).list();
+      let inspected: HostKey;
+      let inspectedJump: HostKey | undefined;
+      if (form.useJump) {
+        const jump = await TermforgeNative.inspectHostKey(
+          form.jumpHost.trim(),
+          Number(form.jumpPort),
         );
-        return;
+        const decision = checkEndpointTrust(known, form.jumpHost, Number(form.jumpPort), jump);
+        if (sequence !== inspectionSequence.current || endpoint !== latestEndpoint.current) return;
+        if (decision.status !== 'trusted') {
+          const approved = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              'Verify jump host',
+              `${form.jumpHost}:${form.jumpPort}\n${jump.algorithm}\n${jump.fingerprint}\n\nVerify this fingerprint before entering the jump-host password to inspect your destination.`,
+              [
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                { text: 'Inspect through this host', onPress: () => resolve(true) },
+              ],
+              { cancelable: true, onDismiss: () => resolve(false) },
+            );
+          });
+          if (!approved) return;
+        }
+        if (
+          sequence !== inspectionSequence.current ||
+          endpoint !== latestEndpoint.current ||
+          !jump.challengeId
+        )
+          return;
+        [inspected, inspectedJump] = await TermforgeNative.inspectHostKeyThroughJump(
+          form.host.trim(),
+          Number(form.port),
+          form.jumpHost.trim(),
+          Number(form.jumpPort),
+          form.jumpUsername,
+          jump.challengeId,
+        );
+      } else {
+        inspected = await TermforgeNative.inspectHostKey(form.host.trim(), Number(form.port));
       }
+      checkEndpointTrust(known, form.host, Number(form.port), inspected);
+      if (inspectedJump)
+        checkEndpointTrust(known, form.jumpHost, Number(form.jumpPort), inspectedJump);
+      if (sequence !== inspectionSequence.current || endpoint !== latestEndpoint.current) return;
+      inspectedEndpoint.current = endpoint;
       setHostKey(inspected);
       setJumpHostKey(inspectedJump);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not inspect the server.');
+      if (sequence === inspectionSequence.current) setError(safeError(caught).safeMessage);
+    } finally {
+      inspecting.current = false;
     }
   }
 
   function approve() {
-    if (!hostKey) return;
+    if (!hostKey || inspectedEndpoint.current !== latestEndpoint.current) return;
     Alert.alert(
       'Trust this server?',
-      `${hostKey.algorithm}\n${hostKey.fingerprint}\n\nConfirm this fingerprint with the server administrator before continuing.`,
+      `${hostKey.algorithm}\n${hostKey.fingerprint}${jumpHostKey ? `\n\nJump host: ${form.jumpHost}:${form.jumpPort}\n${jumpHostKey.algorithm}\n${jumpHostKey.fingerprint}` : ''}\n\nConfirm this fingerprint with the server administrator before continuing.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Connect once', onPress: () => void connect(false) },
@@ -279,11 +326,32 @@ export default function TerminalScreen() {
   }
 
   async function connect(saveTrust = false) {
-    if (!hostKey) return;
+    if (connecting.current) return;
+    if (
+      !hostKey ||
+      inspectedEndpoint.current !== latestEndpoint.current ||
+      trustEndpointId(form) !== latestEndpoint.current ||
+      (form.useJump && !jumpHostKey)
+    ) {
+      setError('Inspect the selected server identities again before connecting.');
+      return;
+    }
+    if (authentication === 'key' && (!importedKey || form.useJump)) {
+      setError('Select an SSH key. Key authentication through a jump host is not supported.');
+      return;
+    }
+    connecting.current = true;
     const startedAt = new Date().toISOString();
+    let createdId: string | undefined;
     try {
+      const database = await openMetadataDatabase();
+      const known = await new KnownHostRepository(database).list();
+      checkEndpointTrust(known, form.host, Number(form.port), hostKey);
+      if (form.useJump && jumpHostKey)
+        checkEndpointTrust(known, form.jumpHost, Number(form.jumpPort), jumpHostKey);
+      if (inspectedEndpoint.current !== latestEndpoint.current)
+        throw new Error('Stale identity review.');
       if (saveTrust) {
-        const database = await openMetadataDatabase();
         await new KnownHostRepository(database).save({
           host: form.host,
           port: Number(form.port),
@@ -307,6 +375,7 @@ export default function TerminalScreen() {
         paneId && profileServerId
           ? await sessionManager.create(paneId, profileServerId)
           : await TermforgeNative.createSession();
+      createdId = id;
       setSessionId(id);
       setHistoryStartedAt(startedAt);
       if (form.useJump && jumpHostKey) {
@@ -316,13 +385,11 @@ export default function TerminalScreen() {
             host: form.host.trim(),
             port: Number(form.port),
             username: form.username,
-            password: form.password,
-            hostKey: hostKey.key,
+            challengeId: hostKey.challengeId,
             jumpHost: form.jumpHost.trim(),
             jumpPort: Number(form.jumpPort),
             jumpUsername: form.jumpUsername,
-            jumpPassword: form.jumpPassword,
-            jumpHostKey: jumpHostKey.key,
+            jumpChallengeId: jumpHostKey.challengeId,
             columns: 80,
             rows: 24,
           }),
@@ -336,7 +403,7 @@ export default function TerminalScreen() {
             username: form.username,
             reference: importedKey.reference,
             reason: 'Authenticate to use this SSH key.',
-            hostKey: hostKey.key,
+            challengeId: hostKey.challengeId,
             columns: 80,
             rows: 24,
           }),
@@ -348,39 +415,32 @@ export default function TerminalScreen() {
             host: form.host.trim(),
             port: Number(form.port),
             username: form.username,
-            password: form.password,
-            hostKey: hostKey.key,
+            challengeId: hostKey.challengeId,
             columns: 80,
             rows: 24,
           }),
         );
       }
     } catch (caught) {
+      if (createdId) await TermforgeNative.disconnect(createdId).catch(() => undefined);
+      setSessionId(undefined);
+      setState('closed');
       if (profileServerId) {
         void saveHistory(profileServerId, startedAt, 'failed');
       }
-      setError(caught instanceof Error ? caught.message : 'Connection failed.');
+      setError(safeError(caught).safeMessage);
+    } finally {
+      connecting.current = false;
     }
   }
 
   async function importKey() {
     setError(undefined);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset) throw new Error('No key file was selected.');
-      const response = await fetch(asset.uri);
-      const openSSH = await response.text();
-      setImportedKey(
-        await TermforgeNative.importEd25519Key(openSSH, keyPassphrase, 'userPresence'),
-      );
-      setKeyPassphrase('');
+      const asset = await TermforgeNative.pickLocalFile('key');
+      setImportedKey(await TermforgeNative.importEd25519Key(asset.handle, 'userPresence'));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The SSH key could not be imported.');
+      setError(safeError(caught).safeMessage);
     }
   }
 
@@ -389,7 +449,7 @@ export default function TerminalScreen() {
     try {
       setEntries(await sftp.current.browse(sessionId, remotePath));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not list the remote directory.');
+      setError(safeError(caught).safeMessage);
     }
   }
 
@@ -404,16 +464,18 @@ export default function TerminalScreen() {
         'Download complete',
         `${result.bytes} bytes\nSHA-256: ${result.sha256}\n\nThe download is in temporary app storage until you save it to Files.`,
         [
-          { text: 'Close', style: 'cancel' },
+          {
+            text: 'Close',
+            style: 'cancel',
+            onPress: () => {
+              void TermforgeNative.discardLocalFile(result.localURL!).catch(() => undefined);
+            },
+          },
           {
             text: 'Save to Files',
             onPress: () => {
               void TermforgeNative.saveFileToFiles(result.localURL!).catch((caught: unknown) =>
-                setError(
-                  caught instanceof Error
-                    ? caught.message
-                    : 'The download could not be saved to Files.',
-                ),
+                setError(safeError(caught).safeMessage),
               );
             },
           },
@@ -421,7 +483,7 @@ export default function TerminalScreen() {
       );
     } catch (caught) {
       setRetryTransfer(() => () => void download(name));
-      setError(caught instanceof Error ? caught.message : 'Download failed.');
+      setError(safeError(caught).safeMessage);
     }
   }
 
@@ -445,9 +507,7 @@ export default function TerminalScreen() {
     try {
       setEditor(await sftp.current.openEditor(sessionId, joinRemotePath(remotePath, entry.name)));
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'The remote text file could not be opened.',
-      );
+      setError(safeError(caught).safeMessage);
     }
   }
   async function renameRemote(entry: RemoteEntry) {
@@ -461,7 +521,7 @@ export default function TerminalScreen() {
       setRenameValue('');
       await refreshFiles();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The remote entry could not be renamed.');
+      setError(safeError(caught).safeMessage);
     }
   }
   function removeRemote(entry: RemoteEntry) {
@@ -480,11 +540,7 @@ export default function TerminalScreen() {
                 await sftp.current.remove(sessionId, remotePath, entry);
                 await refreshFiles();
               } catch (caught) {
-                setError(
-                  caught instanceof Error
-                    ? caught.message
-                    : 'The remote entry could not be deleted.',
-                );
+                setError(safeError(caught).safeMessage);
               }
             })();
           },
@@ -502,7 +558,7 @@ export default function TerminalScreen() {
       setDirectoryName('');
       await refreshFiles();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The directory could not be created.');
+      setError(safeError(caught).safeMessage);
     }
   }
   async function saveEditor() {
@@ -512,9 +568,7 @@ export default function TerminalScreen() {
       setEditor(undefined);
       await refreshFiles();
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'The remote text file could not be saved.',
-      );
+      setError(safeError(caught).safeMessage);
     }
   }
 
@@ -523,16 +577,10 @@ export default function TerminalScreen() {
   async function upload() {
     if (!sessionId) return;
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset) throw new Error('No upload file was selected.');
+      const asset = await TermforgeNative.pickLocalFile('upload');
       const uploaded = await sftp.current.upload(
         sessionId,
-        asset.uri,
+        asset.handle,
         joinRemotePath(remotePath, asset.name),
       );
       if (uploaded.state !== 'completed') throw new Error(uploaded.error ?? 'Upload interrupted.');
@@ -541,7 +589,7 @@ export default function TerminalScreen() {
       Alert.alert('Upload complete', `${uploaded.bytes} bytes\nSHA-256: ${uploaded.sha256}`);
     } catch (caught) {
       setRetryTransfer(() => () => void upload());
-      setError(caught instanceof Error ? caught.message : 'Upload failed.');
+      setError(safeError(caught).safeMessage);
     }
   }
 
@@ -604,7 +652,7 @@ export default function TerminalScreen() {
       ]);
       setError(undefined);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The forward could not be started.');
+      setError(safeError(caught).safeMessage);
     }
   }
 
@@ -614,7 +662,7 @@ export default function TerminalScreen() {
       await TermforgeNative.stopForward(sessionId, forwardId);
       setForwards((current) => current.filter((forward) => forward.id !== forwardId));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The forward could not be stopped.');
+      setError(safeError(caught).safeMessage);
     }
   }
 
@@ -769,7 +817,8 @@ export default function TerminalScreen() {
                 </Text>
                 <Pressable
                   onPress={() =>
-                    void TermforgeNative.cancelTransfers(sessionId)
+                    void sftp.current
+                      .cancel(transfer.operationId)
                       .then(() => setTransfer(undefined))
                       .catch(() => setError('The transfer could not be cancelled.'))
                   }
@@ -1018,11 +1067,7 @@ export default function TerminalScreen() {
               <Pressable
                 onPress={() =>
                   void TermforgeNative.shareClipboard().catch((caught: unknown) =>
-                    setError(
-                      caught instanceof Error
-                        ? caught.message
-                        : 'Copy terminal text before sharing it.',
-                    ),
+                    setError(safeError(caught).safeMessage),
                   )
                 }
                 style={styles.keyButton}
@@ -1171,24 +1216,26 @@ export default function TerminalScreen() {
               <Field
                 label="Jump host"
                 value={form.jumpHost}
-                onChangeText={(jumpHost) => setForm({ ...form, jumpHost })}
+                onChangeText={(jumpHost) => {
+                  setForm({ ...form, jumpHost });
+                  setHostKey(undefined);
+                  setJumpHostKey(undefined);
+                }}
               />
               <Field
                 label="Jump port"
                 value={form.jumpPort}
                 keyboardType="number-pad"
-                onChangeText={(jumpPort) => setForm({ ...form, jumpPort })}
+                onChangeText={(jumpPort) => {
+                  setForm({ ...form, jumpPort });
+                  setHostKey(undefined);
+                  setJumpHostKey(undefined);
+                }}
               />
               <Field
                 label="Jump username"
                 value={form.jumpUsername}
                 onChangeText={(jumpUsername) => setForm({ ...form, jumpUsername })}
-              />
-              <Field
-                label="Jump password"
-                value={form.jumpPassword}
-                secureTextEntry
-                onChangeText={(jumpPassword) => setForm({ ...form, jumpPassword })}
               />
             </View>
           ) : null}
@@ -1219,12 +1266,9 @@ export default function TerminalScreen() {
             />
           </View>
           {authentication === 'password' ? (
-            <Field
-              label="Password"
-              value={form.password}
-              secureTextEntry
-              onChangeText={(password) => setForm({ ...form, password })}
-            />
+            <Text style={{ color: theme.muted }}>
+              Your password will be requested securely when you connect.
+            </Text>
           ) : importedKey ? (
             <View style={styles.keySummary}>
               <Text selectable style={{ color: theme.accent }}>
@@ -1234,13 +1278,7 @@ export default function TerminalScreen() {
             </View>
           ) : (
             <View style={styles.keySummary}>
-              <Field
-                label="Key passphrase (leave empty if none)"
-                value={keyPassphrase}
-                secureTextEntry
-                onChangeText={setKeyPassphrase}
-              />
-              <Action label="Choose encrypted Ed25519 key" onPress={importKey} />
+              <Action label="Choose Ed25519 key" onPress={importKey} />
             </View>
           )}
           {hostKey ? (
@@ -1257,14 +1295,8 @@ export default function TerminalScreen() {
                 disabled={
                   !form.username ||
                   (form.useJump
-                    ? !form.password ||
-                      !form.jumpHost ||
-                      !form.jumpUsername ||
-                      !form.jumpPassword ||
-                      !jumpHostKey
-                    : authentication === 'password'
-                      ? !form.password
-                      : !importedKey)
+                    ? !form.jumpHost || !form.jumpUsername || !jumpHostKey
+                    : authentication === 'key' && !importedKey)
                 }
               />
             </>

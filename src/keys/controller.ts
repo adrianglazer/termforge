@@ -11,8 +11,7 @@ export type NativeKeyResult = {
 export type KeyNativeAdapter = {
   generateEd25519Key(protection: 'userPresence' | 'biometryCurrentSet'): Promise<NativeKeyResult>;
   importEd25519Key(
-    openSSH: string,
-    passphrase: string,
+    handle: string,
     protection: 'userPresence' | 'biometryCurrentSet',
   ): Promise<NativeKeyResult>;
   deleteKey(reference: string): Promise<void>;
@@ -22,6 +21,7 @@ export type KeyNativeAdapter = {
 
 export type KeyMetadataStore = {
   save(key: KeyMetadata): Promise<void>;
+  beginRemoval(key: KeyMetadata): Promise<void>;
   remove(id: string): Promise<void>;
 };
 
@@ -34,13 +34,15 @@ export class KeyManagementController {
   ) {}
 
   async generate(name: string): Promise<KeyMetadata> {
-    return this.saveNativeResult(name, await this.native.generateEd25519Key('userPresence'));
+    const validName = requireName(name);
+    return this.saveNativeResult(validName, await this.native.generateEd25519Key('userPresence'));
   }
 
-  async import(name: string, openSSH: string, passphrase: string): Promise<KeyMetadata> {
+  async import(name: string, handle: string): Promise<KeyMetadata> {
+    const validName = requireName(name);
     return this.saveNativeResult(
-      name,
-      await this.native.importEd25519Key(openSSH, passphrase, 'userPresence'),
+      validName,
+      await this.native.importEd25519Key(handle, 'userPresence'),
     );
   }
 
@@ -52,6 +54,7 @@ export class KeyManagementController {
   }
 
   async remove(key: KeyMetadata): Promise<void> {
+    await this.store.beginRemoval(key);
     await this.native.deleteKey(key.credentialRef);
     await this.store.remove(key.id);
   }
@@ -75,7 +78,12 @@ export class KeyManagementController {
       createdAt: now,
       updatedAt: now,
     };
-    await this.store.save(key);
+    try {
+      await this.store.save(key);
+    } catch (error) {
+      await this.native.deleteKey(result.reference).catch(() => undefined);
+      throw error;
+    }
     return key;
   }
 }

@@ -6,7 +6,17 @@ export const validateTerminalInput = (text: string): void => {
 };
 
 export const retainTerminalOutput = (output: string, maximumBytes: number): string => {
+  if (!Number.isFinite(maximumBytes) || maximumBytes <= 0) return '';
   const bytes = new TextEncoder().encode(output);
   if (bytes.byteLength <= maximumBytes) return output;
-  return new TextDecoder().decode(bytes.slice(bytes.byteLength - maximumBytes));
+  let start = bytes.byteLength - Math.floor(maximumBytes);
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  while (start < bytes.byteLength) {
+    try {
+      return decoder.decode(bytes.slice(start));
+    } catch {
+      start += 1;
+    }
+  }
+  return '';
 };

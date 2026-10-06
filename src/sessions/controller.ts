@@ -9,6 +9,8 @@ export type NativeSessionState =
 
 export type NativeSessionEvent = {
   sessionId: string;
+  generation: number;
+  sequence: number;
   state: NativeSessionState;
   message?: string;
   code?: string;
@@ -20,6 +22,8 @@ export type ManagedSession = {
   paneId: string;
   serverId: string;
   state: NativeSessionState;
+  generation: number;
+  sequence: number;
   createdAt: string;
   reconnectAttempt?: number;
 };
@@ -32,7 +36,7 @@ export type SessionAdapter = {
   subscribeSessionState(listener: (event: NativeSessionEvent) => void): { remove(): void };
 };
 
-/** Mirrors the native retry policy: attempts 1–5 wait 1, 2, 4, 8, and 16 seconds. */
+/** Native retry base before jitter: attempts 1–5 use 1, 2, 4, 8, and 16 seconds. */
 export const reconnectDelaySeconds = (attempt: number): number =>
   Math.min(30, 2 ** Math.max(0, Math.min(5, attempt) - 1));
 
@@ -43,6 +47,7 @@ export const reconnectDelaySeconds = (attempt: number): number =>
  */
 export class SessionController {
   private sessions = new Map<string, ManagedSession>();
+  private closing = new Set<string>();
   private listeners = new Set<Listener>();
   private readonly subscription: { remove(): void };
 
@@ -60,6 +65,8 @@ export class SessionController {
       paneId,
       serverId,
       state: 'created',
+      generation: 1,
+      sequence: 0,
       createdAt: this.now(),
     });
     this.publish();
@@ -67,9 +74,12 @@ export class SessionController {
   }
 
   async close(sessionId: string): Promise<void> {
+    if (!this.sessions.has(sessionId) || this.closing.has(sessionId)) return;
+    this.closing.add(sessionId);
     try {
       await this.adapter.disconnect(sessionId);
     } finally {
+      this.closing.delete(sessionId);
       if (this.sessions.delete(sessionId)) this.publish();
     }
   }
@@ -101,16 +111,21 @@ export class SessionController {
 
   private apply(event: NativeSessionEvent): void {
     const current = this.sessions.get(event.sessionId);
-    if (!current || !acceptsEvent(current.state, event.state)) return;
+    if (!current || !acceptsEvent(current, event)) return;
     if (event.state === 'closed' || event.state === 'failed') this.sessions.delete(event.sessionId);
-    else
-      this.sessions.set(event.sessionId, {
+    else {
+      const updated: ManagedSession = {
         ...current,
         state: event.state,
+        generation: event.generation,
+        sequence: event.sequence,
         ...(event.state === 'reconnecting' && event.attempt !== undefined
           ? { reconnectAttempt: event.attempt }
           : {}),
-      });
+      };
+      if (event.state !== 'reconnecting') delete updated.reconnectAttempt;
+      this.sessions.set(event.sessionId, updated);
+    }
     this.publish();
   }
 
@@ -120,10 +135,15 @@ export class SessionController {
   }
 }
 
-const acceptsEvent = (current: NativeSessionState, next: NativeSessionState): boolean => {
+const acceptsEvent = (current: ManagedSession, event: NativeSessionEvent): boolean => {
+  if (event.generation < current.generation) return false;
+  if (event.sequence <= current.sequence) return false;
+  if (event.generation > current.generation && event.state !== 'reconnecting') return false;
+  const next = event.state;
+  const state = current.state;
   if (next === 'closed' || next === 'failed' || next === 'reconnecting') return true;
-  if (next === 'created') return current === 'created';
-  if (next === 'connecting') return current === 'created' || current === 'reconnecting';
-  if (next === 'connected') return current === 'connecting' || current === 'reconnecting';
-  return next === 'ready' && current === 'connected';
+  if (next === 'created') return state === 'created';
+  if (next === 'connecting') return state === 'created' || state === 'reconnecting';
+  if (next === 'connected') return state === 'connecting' || state === 'reconnecting';
+  return next === 'ready' && state === 'connected';
 };

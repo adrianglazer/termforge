@@ -1,4 +1,5 @@
 import type { RemoteEntry } from '@/native/termforgeNative';
+import { safeError } from '@/application/errors';
 import type { TransferRecord } from '@/sftp/transfers';
 
 export type SftpAdapter = {
@@ -9,16 +10,24 @@ export type SftpAdapter = {
   createRemoteDirectory(sessionId: string, path: string): Promise<void>;
   downloadFile(
     sessionId: string,
+    operationId: string,
     path: string,
   ): Promise<{ url: string; bytes: string; sha256: string }>;
   uploadFile(
     sessionId: string,
+    operationId: string,
     localURL: string,
     path: string,
     overwrite: boolean,
   ): Promise<{ bytes: string; sha256: string }>;
+  cancelTransfer(sessionId: string, operationId: string): Promise<void>;
   readText(sessionId: string, path: string): Promise<{ text: string; fingerprint: string }>;
-  writeText(sessionId: string, path: string, text: string, fingerprint: string): Promise<void>;
+  writeText(
+    sessionId: string,
+    path: string,
+    text: string,
+    fingerprint: string,
+  ): Promise<{ fingerprint: string }>;
 };
 
 export type EditorDocument = {
@@ -64,7 +73,11 @@ export class SftpController {
   ) {}
 
   async browse(sessionId: string, path: string): Promise<RemoteEntry[]> {
-    return this.native.listDirectory(sessionId, path);
+    try {
+      return await this.native.listDirectory(sessionId, path);
+    } catch (error) {
+      throw safeError(error);
+    }
   }
 
   async rename(
@@ -73,30 +86,45 @@ export class SftpController {
     source: string,
     destination: string,
   ): Promise<void> {
+    const sourceName = requireExistingSegment(source, 'source name');
     const next = requireSegment(destination, 'replacement name');
-    await this.native.renameRemote(
-      sessionId,
-      joinRemotePath(directory, source),
-      joinRemotePath(directory, next),
-    );
+    try {
+      await this.native.renameRemote(
+        sessionId,
+        joinRemotePath(directory, sourceName),
+        joinRemotePath(directory, next),
+      );
+    } catch (error) {
+      throw safeError(error);
+    }
   }
 
   async remove(sessionId: string, directory: string, entry: RemoteEntry): Promise<void> {
-    const path = joinRemotePath(directory, entry.name);
-    if (entry.isDirectory) await this.native.removeRemoteDirectory(sessionId, path);
-    else await this.native.removeRemote(sessionId, path);
+    const path = joinRemotePath(directory, requireExistingSegment(entry.name, 'entry name'));
+    try {
+      if (entry.isDirectory) await this.native.removeRemoteDirectory(sessionId, path);
+      else await this.native.removeRemote(sessionId, path);
+    } catch (error) {
+      throw safeError(error);
+    }
   }
 
   async createDirectory(sessionId: string, directory: string, name: string): Promise<void> {
-    await this.native.createRemoteDirectory(
-      sessionId,
-      joinRemotePath(directory, requireSegment(name, 'directory name')),
-    );
+    const directoryName = requireSegment(name, 'directory name');
+    try {
+      await this.native.createRemoteDirectory(sessionId, joinRemotePath(directory, directoryName));
+    } catch (error) {
+      throw safeError(error);
+    }
   }
 
   async openEditor(sessionId: string, path: string): Promise<EditorDocument> {
-    const loaded = await this.native.readText(sessionId, path);
-    return { path, text: loaded.text, fingerprint: loaded.fingerprint, dirty: false };
+    try {
+      const loaded = await this.native.readText(sessionId, path);
+      return { path, text: loaded.text, fingerprint: loaded.fingerprint, dirty: false };
+    } catch (error) {
+      throw safeError(error);
+    }
   }
 
   edit(document: EditorDocument, text: string): EditorDocument {
@@ -104,8 +132,17 @@ export class SftpController {
   }
 
   async saveEditor(sessionId: string, document: EditorDocument): Promise<EditorDocument> {
-    await this.native.writeText(sessionId, document.path, document.text, document.fingerprint);
-    return { ...document, dirty: false };
+    try {
+      const saved = await this.native.writeText(
+        sessionId,
+        document.path,
+        document.text,
+        document.fingerprint,
+      );
+      return { ...document, fingerprint: saved.fingerprint, dirty: false };
+    } catch (error) {
+      throw safeError(error);
+    }
   }
 
   discardEditor(): undefined {
@@ -113,21 +150,24 @@ export class SftpController {
   }
 
   async download(sessionId: string, path: string): Promise<TransferRecord> {
-    return this.runTransfer('download', path, () => this.native.downloadFile(sessionId, path));
-  }
-
-  async upload(sessionId: string, localURL: string, path: string): Promise<TransferRecord> {
-    return this.runTransfer('upload', path, () =>
-      this.native.uploadFile(sessionId, localURL, path, false),
+    return this.runTransfer(sessionId, 'download', path, (operationId) =>
+      this.native.downloadFile(sessionId, operationId, path),
     );
   }
 
-  cancel(id: string): TransferRecord | undefined {
+  async upload(sessionId: string, localURL: string, path: string): Promise<TransferRecord> {
+    return this.runTransfer(sessionId, 'upload', path, (operationId) =>
+      this.native.uploadFile(sessionId, operationId, localURL, path, false),
+    );
+  }
+
+  async cancel(id: string): Promise<TransferRecord | undefined> {
     const current = this.transfers.get(id);
     if (!current || current.state !== 'running') return current;
     this.cancelled.add(id);
     const cancelled = { ...current, state: 'cancelled' as const };
     this.transfers.set(id, cancelled);
+    await this.native.cancelTransfer(current.sessionId, id);
     return cancelled;
   }
 
@@ -143,7 +183,7 @@ export class SftpController {
     record: TransferRecord,
     operation: () => Promise<{ bytes: string; sha256: string }>,
   ): Promise<TransferRecord> {
-    return this.runTransfer(record.direction, record.remotePath, operation);
+    return this.runTransfer(record.sessionId, record.direction, record.remotePath, operation);
   }
 
   snapshot(id: string): TransferRecord | undefined {
@@ -151,15 +191,19 @@ export class SftpController {
   }
 
   private async runTransfer(
+    sessionId: string,
     direction: TransferRecord['direction'],
     remotePath: string,
-    operation: () => Promise<
+    operation: (
+      operationId: string,
+    ) => Promise<
       { bytes: string; sha256: string } | { url: string; bytes: string; sha256: string }
     >,
   ): Promise<TransferRecord> {
     const id = this.makeId();
     const running: TransferRecord = {
       id,
+      sessionId,
       direction,
       remotePath,
       state: 'running',
@@ -168,7 +212,7 @@ export class SftpController {
     };
     this.transfers.set(id, running);
     try {
-      const result = await operation();
+      const result = await operation(id);
       const final = this.cancelled.has(id)
         ? { ...running, state: 'cancelled' as const }
         : {
@@ -180,6 +224,7 @@ export class SftpController {
             ...('url' in result ? { localURL: result.url } : {}),
           };
       this.transfers.set(id, final);
+      this.cancelled.delete(id);
       return final;
     } catch (error) {
       const final = this.cancelled.has(id)
@@ -187,9 +232,10 @@ export class SftpController {
         : {
             ...running,
             state: 'failed' as const,
-            error: error instanceof Error ? error.message : 'Transfer failed.',
+            error: safeError(error).safeMessage,
           };
       this.transfers.set(id, final);
+      this.cancelled.delete(id);
       return final;
     }
   }
@@ -197,6 +243,11 @@ export class SftpController {
 
 const requireSegment = (value: string, label: string): string => {
   const trimmed = value.trim();
-  if (!trimmed || trimmed.includes('/')) throw new Error(`Enter one ${label} without a slash.`);
-  return trimmed;
+  return requireExistingSegment(trimmed, label);
+};
+
+const requireExistingSegment = (value: string, label: string): string => {
+  if (!value || value.includes('/') || value.includes('\0') || value === '.' || value === '..')
+    throw new Error(`Enter one ${label} without a slash.`);
+  return value;
 };

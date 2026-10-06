@@ -32,13 +32,16 @@ export class KeyRepository {
 
   async list(): Promise<KeyMetadata[]> {
     const rows = await this.database.getAllAsync<KeyRow>(
-      'SELECT * FROM keys ORDER BY name COLLATE NOCASE, created_at',
+      'SELECT * FROM keys WHERE id NOT IN (SELECT key_id FROM pending_key_deletions) ORDER BY name COLLATE NOCASE, created_at',
     );
     return rows.map(fromRow);
   }
 
   async get(id: string): Promise<KeyMetadata | undefined> {
-    const row = await this.database.getFirstAsync<KeyRow>('SELECT * FROM keys WHERE id = ?', id);
+    const row = await this.database.getFirstAsync<KeyRow>(
+      'SELECT * FROM keys WHERE id = ? AND id NOT IN (SELECT key_id FROM pending_key_deletions)',
+      id,
+    );
     return row ? fromRow(row) : undefined;
   }
 
@@ -59,8 +62,25 @@ export class KeyRepository {
     );
   }
 
+  async beginRemoval(key: Pick<KeyMetadata, 'id' | 'credentialRef'>): Promise<void> {
+    await this.database.runAsync(
+      'INSERT INTO pending_key_deletions (key_id, credential_ref) VALUES (?, ?) ON CONFLICT(key_id) DO NOTHING',
+      key.id,
+      key.credentialRef,
+    );
+  }
+
+  async pendingRemovals(): Promise<Array<{ id: string; credentialRef: string }>> {
+    return this.database.getAllAsync(
+      'SELECT key_id AS id, credential_ref AS credentialRef FROM pending_key_deletions',
+    );
+  }
+
   async remove(id: string): Promise<void> {
-    await this.database.runAsync('UPDATE servers SET key_id = NULL WHERE key_id = ?', id);
-    await this.database.runAsync('DELETE FROM keys WHERE id = ?', id);
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync('UPDATE servers SET key_id = NULL WHERE key_id = ?', id);
+      await transaction.runAsync('DELETE FROM keys WHERE id = ?', id);
+      await transaction.runAsync('DELETE FROM pending_key_deletions WHERE key_id = ?', id);
+    });
   }
 }

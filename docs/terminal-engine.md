@@ -88,6 +88,26 @@ Paste uses native clipboard access only after user action; preserve bracketed-pa
   Those source changes are not device-verified because the EAS iOS quota was
   exhausted before a new build could be created.
 
+## Task 06 hardening
+
+- Native input writes are serialized and PTY resizes are reduced to the latest
+  dimensions in a 50 ms window, preventing write reordering and split-drag
+  resize storms.
+- The session registry retains the native SwiftTerm view/model while detached
+  and transfers that model to a replacement Expo view on remount. Terminal
+  bytes still travel directly from Citadel to SwiftTerm; no cell or output
+  stream crosses the React bridge.
+- OSC clipboard read/write callbacks and automatic link/iTerm content hooks are
+  inert. Clipboard paste/copy/share remain explicit app actions with byte
+  limits.
+- JS byte-bound helpers now cut only on valid UTF-8 boundaries. Local tests
+  cover malformed/truncated escape input, long Unicode lines, large paste, and
+  a 100,000-line hostile-output fixture.
+
+Native memory, frame pacing, keyboard latency, and the 100,000-line physical
+rendering workload cannot be established by Linux/Metro and remain one compact
+task 08 candidate check.
+
 Build the smallest real route after task 02. Before expanding native services or building task 04 UI, record:
 
 1. Reproducible clean EAS development build using the selected package pins; native facade loads and terminal resources resolve. Record commit, lockfiles, resolved native graph, EAS build ID/image, device and OS. Local Xcode is not required.
@@ -98,3 +118,14 @@ Build the smallest real route after task 02. Before expanding native services or
 6. Transfer a file using SFTP and verify its checksum; foreground/background/foreground never reports a dead connection as live.
 
 Then expand to the full §85 acceptance list, 4-/8-pane scenarios, large SFTP transfers, VoiceOver, and oldest/current iPhone OS matrix. Hardware-keyboard and iPad checks are optional and non-blocking. Task 06 records measured memory and latency. Repeat release-candidate acceptance through TestFlight. Missing EAS signing access or the required iPhone leaves this gate **pending**; cloud build logs, synthetic fixtures, and simulator screenshots do not pass it.
+
+## Task 07 native output boundary — 2026-10-06
+
+`TermforgeOutputGate` runs directly before SwiftTerm's native feed. It buffers only
+complete bounded control sequences, drops remote graphics/clipboard/hyperlink
+control strings and window manipulation, and preserves normal UTF-8/CSI/color/
+title sequences. Native chunk-boundary and hostile-stream tests execute this
+actual gate; JS truncation tests alone do not establish parser safety. SwiftTerm
+input debug logging and terminal diagnostics are disabled. Physical rendering,
+keyboard/selection behavior and combined workload memory still need the shared
+candidate smoke. See `security.md` for precise limits and unsupported features.

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy (draft) — Termforge</title>
+    <meta
+      name="description"
+      content="Draft privacy policy covering Termforge local app data, Keychain credentials, SSH/SFTP connections, file exports, diagnostics, and website hosting."
+    />
+    <meta name="theme-color" content="#101213" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Termforge" />
+    <meta property="og:title" content="Privacy Policy (draft) — Termforge" />
+    <meta
+      property="og:description"
+      content="Draft privacy policy covering Termforge local app data, Keychain credentials, SSH/SFTP connections, file exports, diagnostics, and website hosting."
+    />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary" />
+    <!-- PRODUCTION_DOMAIN / CANONICAL_URL / SOCIAL_IMAGE_URL: add verified absolute HTTPS URLs before launch. -->
+    <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="header">
+      <div class="container header-inner">
+        <a class="brand" href="./"
+          ><img src="assets/brand.png" width="40" height="40" alt="" />Termforge</a
+        >
+        <nav class="nav" aria-label="Main navigation">
+          <a href="./#features">Features</a>
+          <a href="./#demo">Demo</a>
+          <a href="./#faq">FAQ</a>
+          <a href="support">Support</a>
+          <!-- APP_STORE_URL: replace with the verified listing URL. -->
+          <a class="store-link" href="./#availability">App Store · pending</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main" tabindex="-1" class="container">
+      <div class="page-intro">
+        <p class="eyebrow">Termforge / Privacy</p>
+        <h1>Your data.<br />Your destinations.</h1>
+        <p class="lead">
+          Termforge connects your iPhone to servers you choose. Local app storage, remote-server
+          activity, and visits to this website have different data flows.
+        </p>
+        <div class="notice">
+          <p>
+            <strong>Draft pending owner review.</strong> This policy describes inspected source and
+            release documentation. Current-candidate physical privacy checks remain pending.
+            Operator, hosting, correspondence practices, and effective date must be confirmed before
+            publication.
+          </p>
+          <p>
+            <strong>Effective date:</strong> <span class="pending">[OWNER INPUT]</span><br /><strong
+              >Operator and privacy contact:</strong
+            >
+            <span class="pending">[OWNER INPUT: legal name, address, privacy email]</span>
+          </p>
+        </div>
+      </div>
+      <div class="document-layout">
+        <aside class="contents">
+          <h2>On this page</h2>
+          <nav aria-label="On this page">
+            <a href="#scope">Scope &amp; operator</a><a href="#local-data">Local app data</a
+            ><a href="#credentials">Credentials &amp; authentication</a
+            ><a href="#remote-servers">Your remote servers</a
+            ><a href="#files-exports">Imports, exports &amp; clipboard</a
+            ><a href="#diagnostics">Diagnostics &amp; support</a
+            ><a href="#retention">Retention, deletion &amp; recovery</a
+            ><a href="#third-parties">Components &amp; third parties</a
+            ><a href="#website">Website, hosting &amp; cookies</a
+            ><a href="#updates">Policy updates &amp; contact</a>
+          </nav>
+        </aside>
+        <div class="prose">
+          <section id="scope">
+            <h2>Scope &amp; operator</h2>
+            <p>
+              This draft covers the Termforge iPhone app and this static support website. The app is
+              an SSH/SFTP client, not a hosted server service. No Termforge account, proprietary
+              backend, telemetry service, analytics integration, or cloud sync is configured in the
+              reviewed source.
+            </p>
+            <p>
+              The operator's identity and contact details are pending. This is not a filed App Store
+              privacy label or a blanket claim that no information leaves your phone. Commands,
+              files, and authentication intentionally travel to the hosts you select.
+            </p>
+          </section>
+          <section id="local-data">
+            <h2>Local app data</h2>
+            <p>
+              Local SQLite storage contains server names, hostnames, ports, usernames, connection
+              preferences, known-host public keys and fingerprints, workspace layouts and pane
+              titles, settings, snippets, and public key metadata with opaque credential references.
+            </p>
+            <p>
+              Connection history records the related server, start/end times, and outcome. It is
+              distinct from terminal content: terminal transcripts and command history are not
+              persisted. Active terminals still hold output in bounded memory. User-authored
+              snippets or configuration text can contain sensitive information if you enter it.
+            </p>
+            <p>
+              The source applies iOS file protection to app-private metadata, sidecars, downloads,
+              and staging files, and marks private data excluded from backup. Backup exclusion is
+              system guidance, not a guarantee. No iCloud sync entitlement is configured.
+              Current-candidate OS-level protection and lifecycle behavior still require physical
+              acceptance.
+            </p>
+          </section>
+          <section id="credentials">
+            <h2>Credentials &amp; authentication</h2>
+            <p>
+              Private keys and supported stored credentials use app-scoped iOS Keychain items
+              requiring a device passcode, with device-only, nonsynchronizing accessibility.
+              Protected use requires device authentication. Password/passphrase entry and
+              private-key import occur through native prompts and file handling; ordinary app
+              metadata uses references rather than private key bytes.
+            </p>
+            <p>
+              Imported encrypted OpenSSH Ed25519 keys retain their encrypted representation and
+              prompt for a passphrase on use. Remembering passphrases is currently unavailable.
+              Generated Ed25519 keys use Keychain protection; they are not Secure Enclave keys and
+              do not support generated-key passphrase encryption or private-key export.
+            </p>
+            <p>
+              SSH authentication communicates with the chosen server: password authentication sends
+              the password inside the verified SSH transport; key authentication uses the key to
+              authenticate. Private keys are not uploaded to a Termforge backend. Removing a
+              passcode or restoring onto another device can make credentials unavailable. Swift and
+              library memory copies prevent a perfect-memory-erasure guarantee.
+            </p>
+          </section>
+          <section id="remote-servers">
+            <h2>Your remote servers</h2>
+            <p>
+              The app connects over SSH to the host and port you choose, including a configured
+              supported bastion route. The destination receives your network address, authentication
+              exchange, commands, and file operations. SFTP uploads send selected file contents;
+              downloads receive remote content.
+            </p>
+            <p>
+              Server and network operators have their own logging, access, and retention policies.
+              Your commands may write files or start processes on the server. Removing local app
+              data or disconnecting does not erase server logs, reverse remote actions, or delete
+              transferred files.
+            </p>
+            <p>
+              Host-key inspection and validation precede credential use in the implementation; an
+              unexpected changed key blocks connection. Independently verify fingerprints. These
+              mechanisms are not a certification or a guarantee against every threat.
+            </p>
+          </section>
+          <section id="files-exports">
+            <h2>Imports, exports &amp; clipboard</h2>
+            <p>
+              File import/upload uses native, user-selected Files access with bounded temporary
+              copies. Downloads and editor operations create protected temporary content; the source
+              removes completed/discarded and stale staging files, with crash cleanup. Interrupted
+              operations and file-provider behavior remain physical acceptance checks.
+            </p>
+            <p>
+              Configuration export uses an allowlist and excludes credential fields, key references,
+              and trusted-host records. Snippet commands and other public metadata remain
+              user-authored content; a scanner cannot guarantee they contain no manually entered
+              secrets. Review every export before sharing.
+            </p>
+            <p>
+              Saving to Files, copying public keys or terminal selections, and explicit share
+              actions can move data outside the app sandbox to a destination or file provider you
+              choose. That provider and iOS clipboard/backup features have their own practices.
+              Deleting the app cannot retrieve shared copies.
+            </p>
+          </section>
+          <section id="diagnostics">
+            <h2>Diagnostics &amp; support</h2>
+            <p>
+              Application diagnostics are restricted to allowlisted event/error codes and numeric
+              operational context such as counts and timings. The production logging paths exclude
+              raw server errors, hostnames, full paths, credentials, terminal output, clipboard
+              contents, and file bodies; dependency logging is suppressed. No app-owned remote
+              diagnostic uploader is configured.
+            </p>
+            <p>
+              Apple/iOS diagnostic handling depends on system settings and platform practices. This
+              draft does not assert that operating-system diagnostics never exist or that every
+              third-party component has received final release approval.
+            </p>
+            <p>
+              If you contact support once a real destination is supplied, the operator will receive
+              the information you send, such as your email address, report details, and redacted
+              attachments.
+              <span class="pending"
+                >[OWNER INPUT: support provider, purposes, access, retention period, and deletion
+                process]</span
+              >. Do not send secrets or unredacted content. See the
+              <a href="support#reports">reporting guide</a>.
+            </p>
+          </section>
+          <section id="retention">
+            <h2>Retention, deletion &amp; recovery</h2>
+            <p>
+              Saved metadata remains on the device until removed through the relevant app controls
+              or app-data removal. Deleting a saved key closes dependent sessions and coordinates
+              removal of its Keychain item and metadata through a recoverable deletion record. If
+              the operation is interrupted, it is retried after unlock/startup.
+            </p>
+            <p>
+              Uninstalling an iOS app may leave Keychain items. The implementation prevents silent
+              reuse after reinstallation and requires explicit reassociation or cleanup. New-device
+              restoration or changed protection settings can make old credentials unusable. Keep
+              original keys and reviewed configuration exports for recovery.
+            </p>
+            <p>
+              Background/idle lock initiates teardown of live sessions and temporary file authority.
+              Temporary-copy cleanup is implemented; secure erasure of flash storage and perfect
+              memory erasure are not promised. Copies on your servers, in Files providers, clipboard
+              destinations, exports, or backups must be managed separately.
+            </p>
+            <p>
+              <span class="pending"
+                >[OWNER INPUT: support-record retention/deletion, legally required retention, and
+                applicable privacy rights/request procedure]</span
+              >.
+            </p>
+          </section>
+          <section id="third-parties">
+            <h2>Components &amp; third parties</h2>
+            <p>
+              The app bundles components for its interface, terminal, SSH/SFTP, cryptography, and
+              storage, including Expo/React Native, SwiftTerm, Citadel with documented local
+              patches, and their dependencies. These components run in the client; their inclusion
+              alone does not establish a separate hosted data service.
+            </p>
+            <p>
+              Apple handles app distribution and operating-system services under its practices.
+              Chosen remote hosts, network providers, and Files providers may process your data.
+              Final SDK/archive privacy declarations and dependency/notice review remain
+              public-release requirements.
+            </p>
+            <p>
+              <span class="pending"
+                >[OWNER INPUT: operator-selected hosting/support vendors, processing locations,
+                transfers, and contractual disclosures where applicable]</span
+              >.
+            </p>
+          </section>
+          <section id="website">
+            <h2>Website, hosting &amp; cookies</h2>
+            <p>
+              This site serves local HTML, CSS, and brand images. It includes no JavaScript,
+              analytics, advertising, cookies, browser storage, remote fonts, embedded third-party
+              video, or contact form. Following an eventual App Store or contact link will take you
+              to that destination's service.
+            </p>
+            <p>
+              A hosting provider may process IP addresses, requested paths, timestamps, browser
+              details, and errors as part of serving and protecting the website. No production host
+              is selected in this draft. The supplied local Docker server disables access logs;
+              error logs may include request details. That configuration does not determine a future
+              provider's logging.
+            </p>
+            <p>
+              <span class="pending"
+                >[OWNER INPUT: hosting provider, request-log purpose and retention, processing
+                location, and contact for deletion/privacy requests]</span
+              >. No consent banner is included because the supplied site introduces no cookie or
+              tracking mechanism.
+            </p>
+          </section>
+          <section id="updates">
+            <h2>Policy updates &amp; contact</h2>
+            <p>
+              Before public launch, the operator must finalize this draft, supply the effective
+              date, and make the policy available on a stable HTTPS URL and inside the app. Update
+              this policy when app behavior, vendors, or data flows change, and state the new
+              effective date.
+            </p>
+            <p>
+              <strong>Privacy contact:</strong>
+              <span class="pending">[OWNER INPUT: privacy email or working request method]</span>.
+              Legal rights, applicable jurisdiction, and the process for exercising them must be
+              confirmed by the operator. This draft does not replace those rights.
+            </p>
+          </section>
+        </div>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-inner">
+          <a class="brand" href="./"
+            ><img src="assets/brand.png" width="40" height="40" alt="" />Termforge</a
+          >
+          <nav class="footer-nav" aria-label="Footer navigation">
+            <a href="support">Support</a>
+            <a href="terms">Terms and Conditions</a>
+            <a href="privacy" aria-current="page">Privacy</a>
+          </nav>
+        </div>
+        <!-- LEGAL_OPERATOR / COPYRIGHT: owner-approved wording pending. -->
+        <p class="small">
+          Website preview · App Store link, contact details, and legal review pending.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

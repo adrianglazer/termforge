@@ -24,9 +24,10 @@ afterEach(() => {
   while (temporaryDirectories.length) rmSync(temporaryDirectories.pop()!, { recursive: true });
 });
 
-function createExecutor(
-  sqlite: Sqlite,
-): SqlExecutor & { getAllAsync<T>(sql: string, ...params: unknown[]): Promise<T[]> } {
+function createExecutor(sqlite: Sqlite): SqlExecutor & {
+  getAllAsync<T>(sql: string, ...params: unknown[]): Promise<T[]>;
+  withExclusiveTransactionAsync(task: (transaction: unknown) => Promise<void>): Promise<void>;
+} {
   return {
     execAsync: async (sql) => sqlite.exec(sql),
     getFirstAsync: async <T>(sql: string, ...params: unknown[]) =>
@@ -34,6 +35,16 @@ function createExecutor(
     getAllAsync: async <T>(sql: string, ...params: unknown[]) =>
       sqlite.prepare(sql).all(...params) as T[],
     runAsync: async (sql, ...params) => sqlite.prepare(sql).run(...params),
+    withExclusiveTransactionAsync: async (task: (transaction: unknown) => Promise<void>) => {
+      sqlite.exec('BEGIN IMMEDIATE');
+      try {
+        await task(createExecutor(sqlite));
+        sqlite.exec('COMMIT');
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    },
     withTransactionAsync: async (task) => {
       sqlite.exec('BEGIN');
       try {
@@ -108,14 +119,25 @@ describe('real SQLite migrations and repositories', () => {
       fingerprint: 'SHA256:host-one',
       approvedAt: '2026-09-17T00:00:01.000Z',
     });
-    await knownHosts.save({
+    const changedHost = {
       host: 'example.com',
       port: 22,
       algorithm: 'ssh-ed25519',
       publicKey: 'AAAAB3Nza-updated',
       fingerprint: 'SHA256:host-two',
       approvedAt: '2026-09-17T00:00:02.000Z',
+    };
+    await expect(knownHosts.save(changedHost)).rejects.toMatchObject({ code: 'HOST_KEY_CHANGED' });
+    await expect(knownHosts.save({ ...changedHost, algorithm: 'ssh-rsa' })).rejects.toMatchObject({
+      code: 'HOST_KEY_CHANGED',
     });
+    expect((await knownHosts.list())[0]?.publicKey).toBe('AAAAB3Nza');
+    // Identity replacement requires an explicit Known hosts removal first.
+    await knownHosts.remove((await knownHosts.list())[0]!.id);
+    await knownHosts.save(changedHost);
+    await expect(knownHosts.save({ ...changedHost, publicKey: 'AAAAB3Nza' })).rejects.toMatchObject(
+      { code: 'HOST_KEY_CHANGED' },
+    );
     const splitLayout = resizeSplit(
       splitPane(
         { kind: 'leaf', id: 'pane-1', serverId: server.id, title: 'Production' },
@@ -202,7 +224,20 @@ describe('real SQLite migrations and repositories', () => {
       expect.objectContaining({ serverId: server.id, outcome: 'success' }),
     ]);
 
-    await new KeyRepository(reopenedDatabase as never).remove(key.id);
+    const reopenedKeys = new KeyRepository(reopenedDatabase as never);
+    await reopenedKeys.beginRemoval(key);
+    await reopenedKeys.beginRemoval(key); // Idempotent after a failed native deletion.
+    expect(await reopenedKeys.list()).toEqual([]);
+    expect(await reopenedKeys.get(key.id)).toBeUndefined();
+    // A second real SQLite connection sees the committed recovery journal.
+    const recoveryConnection = new Database(path);
+    const recoveryKeys = new KeyRepository(createExecutor(recoveryConnection) as never);
+    expect(await recoveryKeys.pendingRemovals()).toEqual([
+      { id: key.id, credentialRef: key.credentialRef },
+    ]);
+    await recoveryKeys.remove(key.id);
+    expect(await reopenedKeys.pendingRemovals()).toEqual([]);
+    recoveryConnection.close();
     expect(await new ServerRepository(reopenedDatabase as never).get(server.id)).not.toHaveProperty(
       'keyId',
     );

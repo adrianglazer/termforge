@@ -13,7 +13,8 @@
       "supportsTablet": false,
       "deploymentTarget": "17.0",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Authenticate to use protected SSH keys."
       }
     },
     "plugins": [
@@ -33,7 +34,7 @@
     "experiments": {
       "typedRoutes": true,
       "inlineModules": {
-        "watchedDirectories": ["native"]
+        "watchedDirectories": ["native/TermforgeNative", "native/TermforgeNativeProbe"]
       }
     },
     "extra": {

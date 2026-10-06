@@ -12,3 +12,16 @@ tests/ssh-server/generated/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Portable native security checks
+native/.build/
+native/.swiftpm/
+
+# Release evidence and owner-supplied credentials (never upload/commit)
+.release/
+.env
+.env.*
+credentials.json
+*.p8
+*.p12
+*.mobileprovision

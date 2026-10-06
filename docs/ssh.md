@@ -79,3 +79,46 @@ Development builds `b8df3344-1302-4369-abf1-f9e230925e40` and
 picker build is `e049db77-4e13-4767-849d-6e16f641024e`; device verification is
 pending, so none of the new key/SFTP/forwarding capabilities are yet labeled
 accepted.
+
+## Task 06 hardening
+
+- Transfer ownership is now keyed by session plus operation ID. Cancelling one
+  same-session upload/download no longer clears or cancels a sibling transfer;
+  closing a session cancels all of its active operations.
+- Download temporary files use complete file protection and backup exclusion.
+  Files export accepts only generated Termforge download URLs. Uploads require
+  a security-scoped URL or a symlink-resolved app-local cache/tmp/document URL.
+- Remote action names reject slash, NUL, empty, `.` and `..` segments without
+  rewriting existing filenames that contain leading/trailing spaces.
+- Editor save returns the new content fingerprint and uses a temporary sibling
+  plus rollback backup, so a failed replacement does not first delete the
+  original. Conflict hashing remains best-effort rather than a server-side CAS;
+  no unsupported atomicity claim is made.
+- Native events use stable allowlisted codes/messages. JS SFTP boundaries map
+  unknown native/server exceptions to fixed production-safe messages rather
+  than retaining raw errors or paths.
+
+The changed Swift paths require compilation and one interrupted-transfer smoke
+in task 08's signed candidate. No task-specific EAS build was submitted.
+
+## Task 07 implementation update — 2026-10-06
+
+The selected library remains Citadel 0.12.1, now with the explicitly documented
+local patch in `native/Vendor/Citadel`: a usable deferred-auth login deadline,
+event-loop-safe pipeline setup and explicit resumption of paused transport reads.
+The unused `_CryptoExtras` product is removed. The Xcode plugin and portable tests
+use this same package; all remote revisions are locked.
+
+Inspection issues a native single-use, short-lived challenge. A connection
+consumes it into endpoint/key/saved-record/lock/session/generation validation;
+the real handshake verifies the peer before requesting credentials. For private
+bastion targets, the app verifies the bastion first, enters its native password,
+then inspects the destination through that transport. Connecting is a separate
+attempt and prompts again; no inspection password is saved.
+
+The actual owned transport passes real loopback tests for a delayed credential
+offer, wrong-host rejection and a bastion. Local/reverse forwards own accepted
+channels, bound their count and propagate writability backpressure; reverse
+frames receive an explicit SSH-to-byte-buffer codec. Stop/background/lock closes
+owned channels. A stalled reverse-forward cancellation closes its session after
+five seconds. iOS OS integration and signed-device behavior remain task 08 checks.

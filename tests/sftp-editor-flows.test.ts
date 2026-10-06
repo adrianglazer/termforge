@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RemoteEntry } from '@/native/termforgeNative';
+import { AppError } from '@/application/errors';
 import { replaceAll, SftpController, type SftpAdapter, visibleEntries } from '@/sftp/controller';
 
 const entries: RemoteEntry[] = [
@@ -13,6 +14,7 @@ class ControlledSftpAdapter implements SftpAdapter {
   readonly calls: string[] = [];
   failWrite = false;
   deferredDownload: (() => void) | undefined;
+  deferredDownloads = new Map<string, () => void>();
 
   async listDirectory(_session: string, path: string) {
     this.calls.push(`list:${path}`);
@@ -31,14 +33,20 @@ class ControlledSftpAdapter implements SftpAdapter {
   async createRemoteDirectory(_session: string, path: string) {
     this.calls.push(`mkdir:${path}`);
   }
-  async downloadFile(_session: string, path: string) {
-    this.calls.push(`download:${path}`);
-    await new Promise<void>((resolve) => (this.deferredDownload = resolve));
+  async downloadFile(_session: string, operationId: string, path: string) {
+    this.calls.push(`download:${operationId}:${path}`);
+    await new Promise<void>((resolve) => {
+      this.deferredDownload = resolve;
+      this.deferredDownloads.set(operationId, resolve);
+    });
     return { url: 'file:///tmp/file', bytes: '42', sha256: 'hash-download' };
   }
-  async uploadFile(_session: string, _local: string, path: string) {
-    this.calls.push(`upload:${path}`);
+  async uploadFile(_session: string, operationId: string, _local: string, path: string) {
+    this.calls.push(`upload:${operationId}:${path}`);
     return { bytes: '7', sha256: 'hash-upload' };
+  }
+  async cancelTransfer(sessionId: string, operationId: string) {
+    this.calls.push(`cancel:${sessionId}:${operationId}`);
   }
   async readText(_session: string, path: string) {
     this.calls.push(`read:${path}`);
@@ -46,7 +54,9 @@ class ControlledSftpAdapter implements SftpAdapter {
   }
   async writeText(_session: string, path: string, text: string, fingerprint: string) {
     this.calls.push(`write:${path}:${text}:${fingerprint}`);
-    if (this.failWrite) throw new Error('REMOTE_CHANGED');
+    if (this.failWrite)
+      throw new AppError('CONFLICT', 'The remote file changed. Reload it before saving.');
+    return { fingerprint: 'after-save' };
   }
 }
 
@@ -64,7 +74,9 @@ describe('SFTP and editor flows', () => {
       'alpha.txt',
       'z-last.log',
     ]);
-    await expect(controller.browse('session', '/error')).rejects.toThrow('permission denied');
+    await expect(controller.browse('session', '/error')).rejects.toThrow(
+      'The operation could not be completed.',
+    );
   });
 
   it('performs validated directory and file actions', async () => {
@@ -74,14 +86,28 @@ describe('SFTP and editor flows', () => {
     await controller.rename('session', '/home', 'alpha.txt', 'renamed.txt');
     await controller.remove('session', '/home', entries[0]!);
     await controller.remove('session', '/home', entries[1]!);
+    await controller.rename('session', '/home', ' spaced.txt ', 'kept.txt');
     await expect(controller.createDirectory('session', '/home', 'bad/name')).rejects.toThrow(
       'without a slash',
     );
+    await expect(controller.createDirectory('session', '/home', '..')).rejects.toThrow(
+      'without a slash',
+    );
+    await expect(controller.createDirectory('session', '/home', 'bad\0name')).rejects.toThrow(
+      'without a slash',
+    );
+    await expect(
+      controller.rename('session', '/home', '../alpha.txt', 'renamed.txt'),
+    ).rejects.toThrow('without a slash');
+    await expect(
+      controller.remove('session', '/home', { ...entries[0]!, name: '../secret' }),
+    ).rejects.toThrow('without a slash');
     expect(native.calls).toEqual([
       'mkdir:/home/new-dir',
       'rename:/home/alpha.txt:/home/renamed.txt',
       'remove:/home/z-last.log',
       'rmdir:/home/configs',
+      'rename:/home/ spaced.txt :/home/kept.txt',
     ]);
   });
 
@@ -95,7 +121,8 @@ describe('SFTP and editor flows', () => {
       bytes: '21',
       total: '42',
     });
-    expect(controller.cancel('download-1')).toMatchObject({ state: 'cancelled' });
+    await expect(controller.cancel('download-1')).resolves.toMatchObject({ state: 'cancelled' });
+    expect(native.calls).toContain('cancel:session:download-1');
     native.deferredDownload!();
     expect(await pending).toMatchObject({ state: 'cancelled' });
 
@@ -106,6 +133,23 @@ describe('SFTP and editor flows', () => {
       sha256: 'hash-retry',
     }));
     expect(retried).toMatchObject({ state: 'completed', bytes: '8' });
+  });
+
+  it('cancels only the selected transfer when two run in one session', async () => {
+    const native = new ControlledSftpAdapter();
+    const ids = ['download-a', 'download-b'];
+    const controller = new SftpController(native, () => ids.shift()!);
+    const first = controller.download('session', '/home/a');
+    const second = controller.download('session', '/home/b');
+
+    await controller.cancel('download-a');
+    native.deferredDownloads.get('download-a')!();
+    native.deferredDownloads.get('download-b')!();
+
+    await expect(first).resolves.toMatchObject({ id: 'download-a', state: 'cancelled' });
+    await expect(second).resolves.toMatchObject({ id: 'download-b', state: 'completed' });
+    expect(native.calls).toContain('cancel:session:download-a');
+    expect(native.calls).not.toContain('cancel:session:download-b');
   });
 
   it('supports dirty editing, find/replace, discard, and write-back conflict protection', async () => {
@@ -119,10 +163,13 @@ describe('SFTP and editor flows', () => {
       fingerprint: 'before-save',
     });
     expect(controller.discardEditor()).toBeUndefined();
-    expect(await controller.saveEditor('session', edited)).toMatchObject({ dirty: false });
+    expect(await controller.saveEditor('session', edited)).toMatchObject({
+      dirty: false,
+      fingerprint: 'after-save',
+    });
 
     native.failWrite = true;
-    await expect(controller.saveEditor('session', edited)).rejects.toThrow('REMOTE_CHANGED');
+    await expect(controller.saveEditor('session', edited)).rejects.toThrow('remote file changed');
     expect(native.calls).toContain('write:/home/alpha.txt:three two three!:before-save');
   });
 });

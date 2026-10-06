@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { TermforgeNative } from '@/native/termforgeNative';
 import { ScreenShell } from '@/components/ScreenShell';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { SettingsRepository } from '@/settings/repository';
@@ -27,6 +28,7 @@ export default function SettingsScreen() {
     try {
       const db = await openMetadataDatabase();
       await new SettingsRepository(db).save(next);
+      await TermforgeNative.setAutoLockMinutes(next.autoLockMinutes);
       setSettings(next);
     } catch {
       setError('Settings could not be saved.');
@@ -82,14 +84,14 @@ export default function SettingsScreen() {
                 { borderColor: settings?.autoLockMinutes === minutes ? theme.accent : theme.muted },
               ]}
             >
-              <Text
-                style={{ color: settings?.autoLockMinutes === minutes ? theme.accent : theme.text }}
-              >
-                {minutes} min
-              </Text>
+              <Text style={{ color: theme.text }}>{minutes} min</Text>
             </Pressable>
           ))}
         </View>
+        <Text style={{ color: theme.muted }}>
+          Idle or background lock disconnects SSH sessions. Unlock with device authentication to
+          reopen your workspace.
+        </Text>
         <Text style={[styles.heading, { color: theme.text }]}>Terminal font size</Text>
         <View style={styles.choices}>
           {[12, 14, 16, 18].map((terminalFontSize) => (

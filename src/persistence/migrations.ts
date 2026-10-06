@@ -30,6 +30,12 @@ export const migrations: readonly Migration[] = [
     version: 4,
     sql: ["ALTER TABLE settings ADD COLUMN accessory_preset TEXT NOT NULL DEFAULT 'extended'"],
   },
+  {
+    version: 5,
+    sql: [
+      'CREATE TABLE IF NOT EXISTS pending_key_deletions (key_id TEXT PRIMARY KEY NOT NULL, credential_ref TEXT NOT NULL)',
+    ],
+  },
 ];
 export interface SqlExecutor {
   execAsync(sql: string): Promise<unknown>;

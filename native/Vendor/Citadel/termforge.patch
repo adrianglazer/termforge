@@ -1,0 +1,79 @@
+--- a/Package.swift
++++ b/Package.swift
+@@ -16,13 +16,11 @@
+         ),
+     ],
+     dependencies: [
+-        // .package(path: "/Users/joannisorlandos/git/joannis/swift-nio-ssh"),
+         .package(url: "https://github.com/Wellz26/swift-nio-ssh.git", "0.3.4" ..< "0.4.0"),
+         .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
+         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
+         .package(url: "https://github.com/attaswift/BigInt.git", from: "5.2.0"),
+         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.12.3"),
+-        .package(url: "https://github.com/mtynior/ColorizeSwift.git", from: "1.5.0"),
+     ],
+     targets: [
+         .target(name: "CCitadelBcrypt"),
+@@ -33,22 +31,7 @@
+                 .product(name: "NIOSSH", package: "swift-nio-ssh"),
+                 .product(name: "NIO", package: "swift-nio"),
+                 .product(name: "Crypto", package: "swift-crypto"),
+-                .product(name: "_CryptoExtras", package: "swift-crypto"),
++                .product(name: "CCryptoBoringSSL", package: "swift-crypto"),
+-                .product(name: "BigInt", package: "BigInt"),
+-                .product(name: "Logging", package: "swift-log"),
+-            ]
+-        ),
+-        .executableTarget(
+-            name: "CitadelServerExample",
+-            dependencies: [
+-                "Citadel",
+-                .product(name: "ColorizeSwift", package: "ColorizeSwift")
+-            ]),
+-        .testTarget(
+-            name: "CitadelTests",
+-            dependencies: [
+-                "Citadel",
+-                .product(name: "NIOSSH", package: "swift-nio-ssh"),
+                 .product(name: "BigInt", package: "BigInt"),
+                 .product(name: "Logging", package: "swift-log"),
+             ]
+--- a/Sources/Citadel/ClientSession.swift
++++ b/Sources/Citadel/ClientSession.swift
+@@ -108,6 +108,8 @@
+     public var group: EventLoopGroup = MultiThreadedEventLoopGroup.singleton
+     internal var channelHandlers: [ChannelHandler & Sendable] = []
+     public var connectTimeout: TimeAmount = .seconds(30)
++    /// Allows interactive credential entry after host verification.
++    public var loginTimeout: TimeAmount = .seconds(10)
+ 
+     public init(
+         host: String,
+@@ -167,9 +169,16 @@
+         inboundChannelHandler: SSHClientInboundChannelHandler,
+         settings: SSHClientSettings
+     ) -> EventLoopFuture<Void> {
++        // Public async connect(on:settings:) may enter from a Swift executor.
++        // Synchronous NIO pipeline operations must run on the channel event loop.
++        guard channel.eventLoop.inEventLoop else {
++            return channel.eventLoop.flatSubmit {
++                Self.addHandlers(on: channel, inboundChannelHandler: inboundChannelHandler, settings: settings)
++            }
++        }
+         let handshakeHandler = ClientHandshakeHandler(
+             eventLoop: channel.eventLoop,
+-            loginTimeout: .seconds(10)
++            loginTimeout: settings.loginTimeout
+         )
+         var clientConfiguration = SSHClientConfiguration(
+             userAuthDelegate: settings.authenticationMethod(),
+@@ -193,7 +202,8 @@
+                 ),
+                 handshakeHandler
+             )
+-            return channel.eventLoop.makeSucceededVoidFuture()
++            // The transport may pause reads until the SSH pipeline is installed.
++            return channel.setOption(ChannelOptions.autoRead, value: true).map { channel.read() }
+         } catch {
+             return channel.eventLoop.makeFailedFuture(error)
+         }

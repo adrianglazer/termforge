@@ -21,9 +21,9 @@ class ControlledKeyAdapter implements KeyNativeAdapter {
     };
   }
 
-  async importEd25519Key(openSSH: string, passphrase: string) {
-    expect(openSSH).toContain('PRIVATE KEY');
-    expect(passphrase).toBe('passphrase');
+  async importEd25519Key(fileURL: string, protection: string) {
+    expect(fileURL).toBe('selected-key-handle');
+    expect(protection).toBe('userPresence');
     return {
       reference: 'native-imported',
       algorithm: 'ed25519',
@@ -91,6 +91,9 @@ describe('workspace and key-management flows', () => {
       native,
       {
         save: async (key) => void stored.set(key.id, key),
+        beginRemoval: async (key) => {
+          expect(stored.has(key.id)).toBe(true);
+        },
         remove: async (id) => {
           removed.push(id);
           stored.delete(id);
@@ -104,7 +107,7 @@ describe('workspace and key-management flows', () => {
     );
 
     const generated = await controller.generate(' Generated ');
-    const imported = await controller.import(' Imported ', 'OPENSSH PRIVATE KEY', 'passphrase');
+    const imported = await controller.import(' Imported ', 'selected-key-handle');
     const renamed = await controller.rename(generated, ' Renamed ');
     await controller.exportPublicKey(imported);
     await controller.remove(renamed);

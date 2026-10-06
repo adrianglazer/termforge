@@ -109,3 +109,19 @@ interoperability, Keychain behavior, and device acceptance are not yet recorded.
 Record the EAS build ID/image, resolved native graph, signing inputs, iPhone/OS,
 TestFlight build number, and each proof result before changing a capability from
 `unverified`. iPad evidence is optional and does not block the gate.
+
+## Task 06 integration hardening — 2026-10-05
+
+The production session manager remains wired only to `TermforgeNative`; test
+adapters are injected explicitly into controllers. Native session events now
+carry a per-attempt generation and session-monotonic sequence. The JS
+controller rejects old generations, duplicate/out-of-order sequences, and
+invalid state transitions, while close is idempotent under concurrent lifecycle
+requests. A reconnect attempt advances the native generation.
+
+The native registry owns session tasks, clients, writers, forwards, resize
+work, and terminal views. It cancels and closes them on teardown, suppresses
+late events after registry removal, serializes input writes, and coalesces PTY
+resize traffic. A detached terminal view is retained by its session and its
+SwiftTerm instance is adopted by a replacement view, so React remounting does
+not move terminal cells into JS or discard the native model.

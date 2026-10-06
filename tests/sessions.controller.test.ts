@@ -40,9 +40,9 @@ describe('controlled session controller', () => {
       ['one', 'two', 'three', 'four'].map((paneId) => sessions.create(paneId, `server-${paneId}`)),
     );
 
-    adapter.emit({ sessionId: ids[1]!, state: 'connecting' });
-    adapter.emit({ sessionId: ids[1]!, state: 'connected' });
-    adapter.emit({ sessionId: ids[1]!, state: 'ready' });
+    adapter.emit({ sessionId: ids[1]!, generation: 1, sequence: 2, state: 'connecting' });
+    adapter.emit({ sessionId: ids[1]!, generation: 1, sequence: 3, state: 'connected' });
+    adapter.emit({ sessionId: ids[1]!, generation: 1, sequence: 4, state: 'ready' });
 
     expect(sessions.snapshot()).toHaveLength(4);
     expect(sessions.forPane('two')).toMatchObject({ sessionId: ids[1], state: 'ready' });
@@ -57,20 +57,27 @@ describe('controlled session controller', () => {
     const sessions = new SessionController(adapter);
     const id = await sessions.create('pane', 'server');
 
-    adapter.emit({ sessionId: id, state: 'connecting' });
-    adapter.emit({ sessionId: id, state: 'reconnecting', attempt: 3 });
+    adapter.emit({ sessionId: id, generation: 1, sequence: 2, state: 'connecting' });
+    adapter.emit({ sessionId: id, generation: 2, sequence: 3, state: 'reconnecting', attempt: 3 });
     expect(sessions.forPane('pane')).toMatchObject({ state: 'reconnecting', reconnectAttempt: 3 });
     expect(reconnectDelaySeconds(1)).toBe(1);
     expect(reconnectDelaySeconds(3)).toBe(4);
     expect(reconnectDelaySeconds(5)).toBe(16);
 
-    adapter.emit({ sessionId: id, state: 'connected' });
-    adapter.emit({ sessionId: id, state: 'ready' });
-    adapter.emit({ sessionId: id, state: 'connecting' });
+    adapter.emit({ sessionId: id, generation: 2, sequence: 4, state: 'connected' });
+    adapter.emit({ sessionId: id, generation: 2, sequence: 5, state: 'ready' });
+    adapter.emit({ sessionId: id, generation: 1, sequence: 99, state: 'connecting' });
+    adapter.emit({ sessionId: id, generation: 2, sequence: 4, state: 'connecting' });
     expect(sessions.forPane('pane')).toMatchObject({ state: 'ready' });
 
-    adapter.emit({ sessionId: id, state: 'failed', code: 'TIMEOUT' });
-    adapter.emit({ sessionId: id, state: 'ready' });
+    adapter.emit({
+      sessionId: id,
+      generation: 2,
+      sequence: 6,
+      state: 'failed',
+      code: 'TIMEOUT',
+    });
+    adapter.emit({ sessionId: id, generation: 2, sequence: 7, state: 'ready' });
     expect(sessions.snapshot()).toEqual([]);
     sessions.dispose();
   });
@@ -88,7 +95,7 @@ describe('controlled session controller', () => {
     expect(sessions.snapshot()).toHaveLength(2);
 
     await sessions.close(ids[0]!);
-    adapter.emit({ sessionId: ids[0]!, state: 'ready' });
+    adapter.emit({ sessionId: ids[0]!, generation: 1, sequence: 2, state: 'ready' });
     expect(sessions.forPane('pane-one')).toBeUndefined();
 
     await sessions.handleAppState('background');
@@ -107,5 +114,17 @@ describe('controlled session controller', () => {
     expect(restoredLaunch.snapshot()).toEqual([]);
     expect(adapter.created).toEqual(['session-1']);
     restoredLaunch.dispose();
+  });
+
+  it('makes concurrent close requests idempotent', async () => {
+    const adapter = new ControlledSessionAdapter();
+    const sessions = new SessionController(adapter);
+    const id = await sessions.create('pane', 'server');
+
+    await Promise.all([sessions.close(id), sessions.close(id), sessions.close(id)]);
+
+    expect(adapter.disconnected).toEqual([id]);
+    expect(sessions.snapshot()).toEqual([]);
+    sessions.dispose();
   });
 });

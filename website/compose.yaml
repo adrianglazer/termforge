@@ -1,0 +1,32 @@
+services:
+  website:
+    build: .
+    image: termforge-website:latest
+    container_name: termforge-website
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks: [proxy]
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: proxy
+      traefik.http.routers.termforge-website.rule: Host(`termforge.glazer.es`)
+      traefik.http.routers.termforge-website.entrypoints: web
+      traefik.http.routers.termforge-website.priority: '10'
+      traefik.http.routers.termforge-website.service: termforge-website
+      traefik.http.services.termforge-website.loadbalancer.server.port: '8080'
+    logging:
+      driver: local
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+networks:
+  proxy:
+    external: true
+    name: proxy

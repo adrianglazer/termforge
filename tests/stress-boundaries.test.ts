@@ -40,6 +40,23 @@ describe('stress and boundary behavior', () => {
     expect(new TextEncoder().encode(retained).byteLength).toBeLessThanOrEqual(2048);
     expect(retained).toContain('-end');
     expect(retained).not.toContain('start-');
+    const unicode = retainTerminalOutput(`prefix-${'😀'.repeat(10_000)}`, 2049);
+    expect(new TextEncoder().encode(unicode).byteLength).toBeLessThanOrEqual(2049);
+    expect(unicode).not.toContain('\ufffd');
+    expect(retainTerminalOutput('output', 0)).toBe('');
+  });
+
+  it('processes a 100,000-line hostile-output fixture within a fixed retained-byte budget', () => {
+    const output = Array.from(
+      { length: 100_000 },
+      (_, index) => `line-${index} ż😀\u001b]52;c;ignored\u0007\u001b[31mred\u001b[0m\n`,
+    ).join('');
+    const retained = retainTerminalOutput(output, 1024 * 1024);
+
+    expect(new TextEncoder().encode(retained).byteLength).toBeLessThanOrEqual(1024 * 1024);
+    expect(retained).toContain('line-99999');
+    expect(retained).not.toContain('line-0 ');
+    expect(retained).not.toContain('\ufffd');
   });
 
   it('keeps four sessions isolated under combined ready/reconnect/output workload', async () => {
@@ -49,11 +66,17 @@ describe('stress and boundary behavior', () => {
       ['a', 'b', 'c', 'd'].map((pane) => sessions.create(pane, `server-${pane}`)),
     );
     for (const id of ids) {
-      adapter.emit({ sessionId: id!, state: 'connecting' });
-      adapter.emit({ sessionId: id!, state: 'connected' });
-      adapter.emit({ sessionId: id!, state: 'ready' });
+      adapter.emit({ sessionId: id!, generation: 1, sequence: 2, state: 'connecting' });
+      adapter.emit({ sessionId: id!, generation: 1, sequence: 3, state: 'connected' });
+      adapter.emit({ sessionId: id!, generation: 1, sequence: 4, state: 'ready' });
     }
-    adapter.emit({ sessionId: ids[2]!, state: 'reconnecting', attempt: 2 });
+    adapter.emit({
+      sessionId: ids[2]!,
+      generation: 2,
+      sequence: 5,
+      state: 'reconnecting',
+      attempt: 2,
+    });
     expect(sessions.snapshot()).toHaveLength(4);
     expect(sessions.forPane('c')).toMatchObject({ state: 'reconnecting', reconnectAttempt: 2 });
     expect(sessions.forPane('a')).toMatchObject({ state: 'ready' });
@@ -68,17 +91,18 @@ describe('stress and boundary behavior', () => {
       removeRemote: async () => undefined,
       removeRemoteDirectory: async () => undefined,
       createRemoteDirectory: async () => undefined,
-      downloadFile: async (_session, path) => ({
+      downloadFile: async (_session, _operation, path) => ({
         url: `file://${path}`,
         bytes: '11',
         sha256: 'download-hash',
       }),
-      uploadFile: async (_session, _local, path) => ({
+      uploadFile: async (_session, _operation, _local, path) => ({
         bytes: path.endsWith('a') ? '7' : '9',
         sha256: `hash-${path}`,
       }),
       readText: async () => ({ text: '', fingerprint: '' }),
-      writeText: async () => undefined,
+      writeText: async () => ({ fingerprint: 'saved' }),
+      cancelTransfer: async () => undefined,
     };
     const ids = ['transfer-a', 'transfer-b'];
     const controller = new SftpController(native, () => ids.shift()!);

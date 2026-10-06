@@ -1,0 +1,11 @@
+--- a/Package.swift
++++ b/Package.swift
+@@ -85,6 +85,8 @@
+     name: "swift-crypto",
+     products: [
+         .library(name: "Crypto", targets: ["Crypto"]),
++        // Expose the existing C target without linking the unused RSA parser.
++        .library(name: "CCryptoBoringSSL", targets: ["CCryptoBoringSSL"]),
+         .library(name: "_CryptoExtras", targets: ["_CryptoExtras"]),
+         /* This target is used only for symbol mangling. It's added and removed automatically because it emits build warnings. MANGLE_START
+             .library(name: "CCryptoBoringSSL", type: .static, targets: ["CCryptoBoringSSL"]),

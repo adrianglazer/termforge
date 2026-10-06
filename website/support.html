@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Support — Termforge</title>
+    <meta
+      name="description"
+      content="Get started with Termforge on iPhone. Troubleshoot SSH connections, Ed25519 keys, host fingerprints, background disconnects, and SFTP files."
+    />
+    <meta name="theme-color" content="#101213" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Termforge" />
+    <meta property="og:title" content="Support — Termforge" />
+    <meta
+      property="og:description"
+      content="Get started with Termforge on iPhone. Troubleshoot SSH connections, Ed25519 keys, host fingerprints, background disconnects, and SFTP files."
+    />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary" />
+    <!-- PRODUCTION_DOMAIN / CANONICAL_URL / SOCIAL_IMAGE_URL: add verified absolute HTTPS URLs before launch. -->
+    <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="header">
+      <div class="container header-inner">
+        <a class="brand" href="./"
+          ><img src="assets/brand.png" width="40" height="40" alt="" />Termforge</a
+        >
+        <nav class="nav" aria-label="Main navigation">
+          <a href="./#features">Features</a>
+          <a href="./#demo">Demo</a>
+          <a href="./#faq">FAQ</a>
+          <a href="support" aria-current="page">Support</a>
+          <!-- APP_STORE_URL: replace with the verified listing URL. -->
+          <a class="store-link" href="./#availability">App Store · pending</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main" tabindex="-1" class="container">
+      <div class="page-intro">
+        <p class="eyebrow">Termforge / Support</p>
+        <h1>A little help<br />getting connected.</h1>
+        <p class="lead">
+          Start with your server, its fingerprint, and the credentials you already use. These guides
+          describe the current implementation.
+        </p>
+        <div class="notice">
+          <!-- SUPPORT_EMAIL / ISSUE_TRACKER_URL / SECURITY_CONTACT: owner input pending. -->
+          <p>
+            <strong>Direct support contact pending.</strong> An owner-approved support email and
+            private security destination have not been supplied. This preview has no contact form or
+            working report destination.
+          </p>
+          <p class="small">
+            Public availability is also pending. See the
+            <a href="./#availability">availability note</a>.
+          </p>
+        </div>
+      </div>
+      <div class="document-layout">
+        <aside class="contents">
+          <h2>On this page</h2>
+          <nav aria-label="On this page">
+            <a href="#getting-started">Getting started</a
+            ><a href="#connections">Connection failures</a
+            ><a href="#authentication">Passwords &amp; SSH keys</a
+            ><a href="#host-keys">Host-key warnings</a
+            ><a href="#disconnects">Disconnects &amp; workspaces</a
+            ><a href="#files">Files, transfers &amp; editing</a
+            ><a href="#reports">Bug &amp; feature reports</a
+            ><a href="#security">Sensitive security reports</a>
+          </nav>
+        </aside>
+        <div class="prose">
+          <section id="getting-started">
+            <h2>Getting started</h2>
+            <ol>
+              <li>
+                <strong>Check access.</strong> Use an iPhone with iOS 17 or later and an SSH server
+                you are authorized to access. Confirm the host, SSH port, username, and a supported
+                credential with the server administrator.
+              </li>
+              <li>
+                <strong>Prepare a key if needed.</strong> In Keys, generate or import an Ed25519
+                key. Install its public key on your server using the server's usual authorized-key
+                process. Keep your original private-key backup separately; Termforge does not export
+                private keys.
+              </li>
+              <li>
+                <strong>Add a server.</strong> Save the hostname, port, username, and password/key
+                method. Select an imported or generated key for key authentication. Do not place
+                secrets in profile labels, startup commands, or snippets.
+              </li>
+              <li>
+                <strong>Inspect its identity.</strong> Independently obtain the server's SHA-256
+                host fingerprint from its administrator or a trusted console. Compare it with
+                Termforge's inspection before approving trust and connecting.
+              </li>
+              <li>
+                <strong>Open a terminal.</strong> Authenticate through the native prompt. Run a
+                harmless remote command, then assign the server to a workspace and split panes if
+                useful.
+              </li>
+              <li>
+                <strong>Open files.</strong> Browse SFTP using the connected session. Try a small
+                harmless text file before transferring or editing important content.
+              </li>
+            </ol>
+            <p>
+              A server-side tool such as tmux can preserve remote processes between connections.
+              Termforge itself closes sessions on background or idle lock.
+            </p>
+          </section>
+          <section id="connections">
+            <h2>Connection failures</h2>
+            <p>
+              Check spelling, port, username, and network reachability. A timeout can mean a
+              firewall, private network, or unavailable host; “connection refused” can mean nothing
+              is listening on that port. Ask the server administrator to confirm SSH is enabled and
+              that your account may connect.
+            </p>
+            <p>
+              Test from a trusted client on a comparable network if possible. A private host may
+              require its usual VPN or bastion access. Termforge's implemented bastion route
+              supports one password-authenticated hop; chained and key-authenticated bastions are
+              unavailable, and current-candidate device verification is pending.
+            </p>
+            <p>
+              After network loss, inspect the connection state before retrying. Authentication and
+              host-trust failures require your action. Do not repeatedly change security settings
+              just to make a connection succeed.
+            </p>
+          </section>
+          <section id="authentication">
+            <h2>Passwords &amp; SSH keys</h2>
+            <p>
+              Confirm the username and that the selected public key is authorized on the server.
+              Only password and Ed25519 authentication are currently supported.
+              Keyboard-interactive/MFA, RSA/ECDSA private keys, and remembered passphrases are
+              unavailable.
+            </p>
+            <p>
+              Use the native Files picker to import a supported OpenSSH Ed25519 private key, then
+              provide its passphrase when prompted. Imports accept a single key in a bounded file;
+              malformed, unsupported, or oversized keys are rejected. Never paste a private key into
+              a report or terminal snippet.
+            </p>
+            <p>
+              Stored credentials require an iPhone passcode. If device authentication is canceled or
+              a key is unavailable, retry only after checking the intended key and protection
+              settings. A removed passcode, changed biometric enrollment under a strict policy, new
+              device, or reinstallation can make a credential unavailable. Use explicit
+              reassociation or re-import; the app does not silently use a different credential.
+            </p>
+            <p>
+              Older encrypted imports may need re-importing to preserve their original encrypted
+              envelope. Generated keys use Keychain protection and cannot be exported privately or
+              assigned generated-key passphrase encryption.
+            </p>
+          </section>
+          <section id="host-keys">
+            <h2>Host-key warnings</h2>
+            <div class="notice">
+              <p>
+                <strong>Stop and independently verify an unexpected change.</strong> Contact the
+                host's administrator through a trusted channel or inspect its fingerprint through a
+                trusted server console. A changed key can be a legitimate rebuild or a sign of
+                interception.
+              </p>
+            </div>
+            <p>
+              Termforge blocks a changed known host key. Do not blindly accept a replacement, remove
+              trust merely to suppress the warning, or disable verification. Only after confirming
+              the new fingerprint should you deliberately remove the old record in Known Hosts,
+              inspect again, and approve the verified identity. For a bastion route, verify both the
+              bastion and destination.
+            </p>
+          </section>
+          <section id="disconnects">
+            <h2>Disconnects &amp; workspaces</h2>
+            <p>
+              Backgrounding and idle lock intentionally close SSH connections, transfers, and
+              forwards. Unlock when you return and reconnect. A temporary interruption and an actual
+              background transition are handled differently; current-candidate physical lifecycle
+              acceptance is still pending.
+            </p>
+            <p>
+              A restored workspace contains layout and assignments, not a live connection or saved
+              transcript. Check each pane's state. Reconnect creates a new shell; unsent input,
+              snippets, startup commands, and editor writes are not automatically replayed. Do not
+              assume a canceled or interrupted remote command was undone.
+            </p>
+            <p>
+              For composed characters that do not enter correctly through the terminal keyboard, use
+              the Unicode text composer. Include the input path and a harmless example in a bug
+              report.
+            </p>
+          </section>
+          <section id="files">
+            <h2>Files, transfers &amp; editing</h2>
+            <p>
+              Confirm that SFTP is enabled and your remote account can read or write the directory.
+              Check remote ownership, permissions, available space, and whether the destination
+              already exists. Do not grant broader permissions blindly.
+            </p>
+            <p>
+              Use the Files picker for local uploads and Save to Files for downloads. Provider
+              access or an expired selection may require selecting the file again. Transfers are
+              limited to 256 MiB; canceled or interrupted work is incomplete and requires an
+              explicit retry. Check the completed file before relying on it.
+            </p>
+            <p>
+              The editor accepts UTF-8 text up to 2 MiB. Binary or larger content is rejected. Back
+              up important files on the server first. If another process changes a file, reload or
+              deliberately resolve the conflict before saving. Termforge's checks do not guarantee
+              atomic changes on every server.
+            </p>
+          </section>
+          <section id="reports">
+            <h2>Bug &amp; feature reports</h2>
+            <p>
+              <strong>Support email:</strong>
+              <span class="pending">[OWNER INPUT: support email]</span><br /><strong
+                >Optional issue tracker:</strong
+              >
+              <span class="pending">[OWNER INPUT: tracker URL, or omit]</span>
+            </p>
+            <p>For a bug, describe:</p>
+            <ul>
+              <li>App version/build and whether it came from TestFlight or a public release.</li>
+              <li>iPhone model and iOS version; find these in Settings → General → About.</li>
+              <li>Expected behavior, actual behavior, and short reproduction steps.</li>
+              <li>
+                Whether it happens on Wi-Fi/cellular, after backgrounding, or with one particular
+                server; omit identifying addresses.
+              </li>
+              <li>Redacted screenshots or allowlisted error text, if useful.</li>
+            </ul>
+            <p>
+              Find the installed app version under iOS Settings → General → iPhone Storage →
+              Termforge; for a beta, TestFlight also shows version/build details. Feature requests
+              should describe the task you want to accomplish and what currently gets in the way.
+            </p>
+            <p>
+              <strong
+                >Do not send passwords, private keys, passphrases, unredacted terminal output, full
+                configuration exports, or personal files.</strong
+              >
+              Review snippets, usernames, hostnames, file paths, and screenshots before sharing.
+            </p>
+          </section>
+          <section id="security">
+            <h2>Sensitive security reports</h2>
+            <p>
+              <strong>Private security contact:</strong>
+              <span class="pending">[OWNER INPUT: private security email or reporting URL]</span>
+            </p>
+            <p>
+              Keep security vulnerabilities and credential exposures out of a public issue tracker.
+              Once the owner supplies a private destination, send a minimal redacted description and
+              harmless reproduction steps there. Do not include working credentials or exploit
+              someone else's system. No response-time promise is made in this draft.
+            </p>
+            <p>For data-handling details, read the <a href="privacy">draft privacy policy</a>.</p>
+          </section>
+        </div>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-inner">
+          <a class="brand" href="./"
+            ><img src="assets/brand.png" width="40" height="40" alt="" />Termforge</a
+          >
+          <nav class="footer-nav" aria-label="Footer navigation">
+            <a href="support" aria-current="page">Support</a>
+            <a href="terms">Terms and Conditions</a>
+            <a href="privacy">Privacy</a>
+          </nav>
+        </div>
+        <!-- LEGAL_OPERATOR / COPYRIGHT: owner-approved wording pending. -->
+        <p class="small">
+          Website preview · App Store link, contact details, and legal review pending.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
