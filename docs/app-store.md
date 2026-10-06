@@ -28,6 +28,16 @@ keys use iOS Keychain and native secure prompts. Configuration exports exclude
 credential fields; review your snippets and other text before sharing them.
 Termforge requires no app account or subscription and includes no analytics.
 
+Planned launch offer: free download, an explicitly started seven-day trial with
+full access, then a US $14.99 one-time lifetime unlock. No automatic charge when
+the trial ends; buy immediately if preferred. Other storefronts use Apple's
+localized prices and the App Store purchase sheet supplies the applicable price.
+The original verified acquisition starts the trial; reinstall/restore under the
+same App Store account does not restart it. Expiry interrupts remote work while
+keeping saved hosts, keys, settings and local drafts available. Lifetime is a
+non-expiring unlock subject to Apple refunds/revocations, without a promise of
+perpetual OS support. Actual purchase validation and public availability are pending.
+
 An SSH server you are authorized to use is required. Commands execute on the
 remote host. iPhone running iOS 17 or later is required. Background or idle lock
 disconnects sessions; return to the app and reconnect to continue.
@@ -46,8 +56,12 @@ as verified until the candidate record supports those claims.
 
 Supply the existing App Store Connect numeric Apple ID and team, developer/legal
 name, copyright, primary language, distribution regions, price and support contact.
-No monetization is configured in this version; task 10 decisions require their own
-implementation and updated metadata if adopted.
+Task 10 now implements the planned trial/lifetime model in source; registered
+products and Apple purchase validation remain pending. Build 4 predates it and
+cannot support the new offer. Follow [monetization](monetization.md) for the free
+app, two non-consumables, US $14.99 base price, localized prices, restore/review
+metadata and owner-only commercial setup. Do not publish purchase claims until
+the later compatible candidate and store configuration are validated.
 
 Publish a stable HTTPS privacy policy and support page before public submission.
 The support URL must offer a real contact method. A marketing URL is optional;
@@ -68,7 +82,8 @@ App Store privacy answers from the final archive and all included SDKs; do not
 pre-submit a “Data Not Collected” label solely from this document. Verify required
 reason API/privacy manifests and SDK notices in the archive, and ensure the
 published policy is available inside the app as required by Apple's review rules.
-The reviewed source has no in-app policy link yet; that is a public-release gate
+Task 10 includes offline-readable purchase terms/privacy/support links. Final
+operator-approved full policy and real published HTTPS links remain a public-release gate
 requiring the owner-supplied URL and a focused follow-up change.
 
 Answer Apple's age-rating questionnaire for the actual app: a developer utility

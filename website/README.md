@@ -19,8 +19,8 @@ configuration serves the site at the domain root. A basic Python static server
 does not implement these clean-URL routes; other hosting must provide equivalent
 routing/redirects to preview or publish the complete site.
 
-Clean-URL validation passed against the rebuilt nginx container: all four pages,
-14 legacy/trailing-slash redirects with and without query strings, 107 relative
+Historical task 09 clean-URL validation passed against its nginx container: all
+four pages, 14 legacy/trailing-slash redirects with and without query strings, 107 relative
 page/asset links and fragment targets, and missing/private-file 404 responses.
 
 ## Docker with Traefik
@@ -115,14 +115,14 @@ them consistent. No source generator or parent-directory build is required.
   links only when actual email addresses are supplied; there is no delivery form.
 - Search **`LEGAL_OPERATOR`**, **`COPYRIGHT`**, `[LEGAL…]`, and `[OWNER…]` across
   terms/privacy/support. Confirm the operator, address, contacts, jurisdiction,
-  effective dates, commercial model, Apple license relationship, legal provisions,
+  effective dates, the confirmed trial/lifetime model's legal provisions, Apple license relationship,
   privacy rights, support vendors, correspondence retention, and hosting/log policy.
 - Search **`PRODUCTION_DOMAIN`**, **`CANONICAL_URL`**, **`SOCIAL_IMAGE_URL`** in
   each `<head>`. After selecting the real HTTPS domain and path, add the appropriate
   per-page canonical link and `og:url`, plus a real absolute `og:image` URL and
   `og:image:alt`. Prepare a local 1200×630 social image from approved branding/media.
   Unique titles/descriptions, Open Graph text, social card type, and favicon are
-  already present. No guessed public URL, pricing, rating, or structured data exists.
+  already present. No guessed public URL, rating, or structured data exists. Pricing is the confirmed task 10 decision, explicitly marked as the planned launch model.
 
 ## Media replacement list
 
@@ -201,7 +201,7 @@ Final Apple license choice and mandatory terms remain owner/legal work.
 
 - [ ] Owner/legal approval of terms, privacy, operator/copyright, dates and jurisdiction.
 - [ ] Real support and private security contacts; finalize correspondence/hosting policies.
-- [ ] Confirm current app release/device/security/notice gates, availability and pricing.
+- [ ] Confirm current app release/device/security/notice and StoreKit gates, registered IAPs, localized prices and public availability.
 - [ ] Real HTTPS App Store URL everywhere; adjust availability, actions, footer and FAQ.
 - [ ] Replace all media slots with reviewed current-candidate captures/demo and captions.
 - [ ] Set production domain, per-page canonical/OG URLs and real social image.
@@ -249,3 +249,46 @@ temporary archives are excluded by the Docker build-context allowlist.
 Validation: Bash syntax and isolated mocked build/save/upload/load success and
 failure flows were checked. ShellCheck is unavailable locally. Preparation did
 not execute the script against `adrian` or perform a deployment.
+
+## Task 10 pricing and purchase copy — 2026-10-06
+
+Authoritative decision: [task 10](../tasks/10-gpt-6.1-sol-monetization.md), with
+implementation and release setup in [monetization](../docs/monetization.md).
+This directory remains independently copyable; those relative documentation
+links are repository maintenance references, not served website links.
+
+The planned launch model is free download; an explicitly started seven-day
+trial with every feature; then **US $14.99 once** for a non-expiring lifetime
+unlock. No subscription or automatic charge. Buying immediately is allowed.
+The app's original verified Apple trial acquisition starts exactly 168 hours;
+reinstall/restore under the same account never restarts it. Every remote entry
+point is gated, and expiry interrupts active sessions, forwards and transfers.
+Local data/drafts remain available under existing authentication. Apple handles
+purchases, applicable refunds/revocations and restoration; locally available
+verified access works offline, while trials retain their original expiry.
+
+Copy locations: `index.html` hero, prominent `#pricing`, purchase FAQs and closing
+availability/action copy; `support.html#purchases`; `terms.html#commercial`;
+`privacy.html#purchases`. Each distinguishes the app from this static website,
+which does not start trials or take payment. US $14.99 is never described as a
+worldwide fixed price: other storefronts use Apple's localized prices and the
+Apple purchase sheet supplies the applicable price. Update these locations,
+app panels and task 11 store materials together if the owner changes the offer.
+
+The existing signed task 08 candidate predates StoreKit access enforcement. The
+owner reports waiting for distribution; purchase validation needs a later
+compatible binary. Keep planned-offer wording, pending App Store links and draft
+legal/contact/media placeholders until release evidence, actual Apple validation
+and a real public listing URL exist. No account, commercial setup, Family Sharing,
+refund guarantee, public URL or successful production purchase is invented.
+
+Task 10 checks: all four pages at 320/390/768/1440 px have no horizontal overflow
+or missing images; keyboard skip/focus and native FAQ expansion pass; no console
+warnings/errors. Content has no scripts, and nginx sends `script-src 'none'`.
+JavaScript-disable/reduced-motion emulation is unavailable in the browser API;
+plain HTML disclosures and CSS remain inspectable. The standalone Docker image
+build passes from `website/`, with source-identical served pages, 115 relative
+page/asset links and fragments, 14 redirects and eight missing/private-file 404s.
+Compose configuration and independent serving are retained. The task 10 record
+contains final check results and release blockers. No deployment, Traefik/Cloudflare
+change or execution of `deploy.sh` occurred.

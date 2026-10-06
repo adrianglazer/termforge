@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TermforgeNative } from '@/native/termforgeNative';
+import { AccessPanel } from '@/access/AccessPanel';
 import { ScreenShell } from '@/components/ScreenShell';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { SettingsRepository } from '@/settings/repository';
@@ -42,6 +43,7 @@ export default function SettingsScreen() {
         message="Preferences are stored locally. Connection credentials and private keys are never included in exports."
       />
       <ScrollView contentContainerStyle={styles.content}>
+        <AccessPanel />
         <Text style={[styles.heading, { color: theme.text }]}>Terminal theme</Text>
         <View style={styles.choices}>
           {terminalThemes.map((name) => (

@@ -64,6 +64,19 @@ internal final class TermforgeTerminalNativeView: ExpoView, TerminalViewDelegate
     if !admitted.isEmpty { terminal.feed(byteArray: admitted[...]) }
   }
 
+  internal func setKeyboardVisible(_ visible: Bool) throws {
+    if visible {
+      try TermforgeAppLock.shared.requireUnlocked()
+      TermforgeAppLock.shared.recordActivity()
+      terminal.becomeFirstResponder()
+    } else {
+      // Also dismiss a composer/search field in this window, just like tapping
+      // outside a text field. Keep the terminal and SSH session attached.
+      window?.endEditing(true)
+      terminal.resignFirstResponder()
+    }
+  }
+
   internal func sendSemanticKey(_ key: String) throws {
     let bytes: [UInt8]
     switch key {

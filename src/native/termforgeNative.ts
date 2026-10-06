@@ -1,5 +1,6 @@
 import { requireNativeModule, requireNativeView as requireNativeViewManager } from 'expo';
 import type { ViewProps } from 'react-native';
+import type { AccessSnapshot } from '@/domain/access';
 
 type EventSubscription = { remove(): void };
 
@@ -33,6 +34,11 @@ export type TransferProgress = {
 export type SecurityState = { locked: boolean; revision: number };
 
 type NativeApi = {
+  accessState(): Promise<AccessSnapshot>;
+  refreshAccess(): Promise<AccessSnapshot>;
+  purchaseAccess(kind: 'trial' | 'lifetime'): Promise<AccessSnapshot>;
+  restorePurchases(): Promise<AccessSnapshot>;
+  addListener(event: 'onAccessState', listener: (event: AccessSnapshot) => void): EventSubscription;
   credentialStates(references: string[]): Promise<Record<string, string>>;
   orphanedKeys(references: string[]): Promise<string[]>;
   reassociateKey(reference: string): Promise<void>;
@@ -57,6 +63,7 @@ type NativeApi = {
   createSession(): Promise<string>;
   connectPassword(id: string, options: string): Promise<void>;
   disconnect(id: string): Promise<void>;
+  setKeyboardVisible(id: string, visible: boolean): Promise<void>;
   sendKey(
     id: string,
     key:
@@ -86,6 +93,7 @@ type NativeApi = {
   copyText(text: string): Promise<void>;
   shareClipboard(): Promise<void>;
   saveFileToFiles(handle: string): Promise<void>;
+  saveTextDraftToFiles(text: string): Promise<void>;
   searchTerminal(
     id: string,
     term: string,

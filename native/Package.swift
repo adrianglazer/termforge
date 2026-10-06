@@ -14,11 +14,15 @@ let package = Package(
 ],
   targets: [
     .target(name: "TermforgeSecurityCore", path: "TermforgeNative",
-      exclude: ["TermforgeNativeModule.swift", "TermforgeTerminalNativeView.swift", "TermforgeGlueHandler.swift", "TermforgeCredentialPrompt.swift", "TermforgeFileAccess.swift", "TermforgeAppLock.swift", "TermforgeCredentialInventory.swift", "TermforgeHostTrust.swift"],
+      exclude: ["TermforgeAccessModel.swift", "TermforgeAccessService.swift", "TermforgeAccessClockStorage.swift", "TermforgeNativeModule.swift", "TermforgeTerminalNativeView.swift", "TermforgeGlueHandler.swift", "TermforgeCredentialPrompt.swift", "TermforgeFileAccess.swift", "TermforgeAppLock.swift", "TermforgeCredentialInventory.swift", "TermforgeHostTrust.swift"],
       sources: ["TermforgeOutputGate.swift", "TermforgeKeyPreflight.swift"]),
+    .target(name: "TermforgeAccessCore", path: "TermforgeNative",
+      exclude: ["TermforgeNativeModule.swift", "TermforgeTerminalNativeView.swift", "TermforgeGlueHandler.swift", "TermforgeCredentialPrompt.swift", "TermforgeFileAccess.swift", "TermforgeAppLock.swift", "TermforgeCredentialInventory.swift", "TermforgeHostTrust.swift", "TermforgeOutputGate.swift", "TermforgeKeyPreflight.swift", "TermforgeAccessService.swift", "TermforgeAccessClockStorage.swift"],
+      sources: ["TermforgeAccessModel.swift"]),
+    .testTarget(name: "TermforgeAccessTests", dependencies: ["TermforgeAccessCore"], path: "AccessTests"),
     .testTarget(name: "TermforgeSecurityTests", dependencies: ["TermforgeSecurityCore"], path: "SecurityTests"),
     .target(name: "TermforgeNetworkSecurity", dependencies: [.product(name: "Citadel", package: "Citadel"), .product(name: "NIO", package: "swift-nio"), .product(name: "NIOSSH", package: "swift-nio-ssh")], path: "TermforgeNative",
-      exclude: ["TermforgeNativeModule.swift", "TermforgeTerminalNativeView.swift", "TermforgeCredentialPrompt.swift", "TermforgeFileAccess.swift", "TermforgeAppLock.swift", "TermforgeCredentialInventory.swift", "TermforgeHostTrust.swift", "TermforgeOutputGate.swift", "TermforgeKeyPreflight.swift"], sources: ["TermforgeGlueHandler.swift"]),
+      exclude: ["TermforgeAccessModel.swift", "TermforgeAccessService.swift", "TermforgeAccessClockStorage.swift", "TermforgeNativeModule.swift", "TermforgeTerminalNativeView.swift", "TermforgeCredentialPrompt.swift", "TermforgeFileAccess.swift", "TermforgeAppLock.swift", "TermforgeCredentialInventory.swift", "TermforgeHostTrust.swift", "TermforgeOutputGate.swift", "TermforgeKeyPreflight.swift"], sources: ["TermforgeGlueHandler.swift"]),
     .testTarget(name: "TermforgeNetworkTests", dependencies: ["TermforgeNetworkSecurity", "TermforgeSecurityCore", .product(name: "Crypto", package: "swift-crypto"), .product(name: "Citadel", package: "Citadel"), .product(name: "NIO", package: "swift-nio"), .product(name: "NIOEmbedded", package: "swift-nio"), .product(name: "NIOSSH", package: "swift-nio-ssh")], path: "NetworkTests")
   ]
 )

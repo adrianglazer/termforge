@@ -32,6 +32,7 @@
         <nav class="nav" aria-label="Main navigation">
           <a href="./#features">Features</a>
           <a href="./#demo">Demo</a>
+          <a href="./#pricing">Pricing</a>
           <a href="./#faq">FAQ</a>
           <a href="support">Support</a>
           <!-- APP_STORE_URL: replace with the verified listing URL. -->
@@ -68,6 +69,7 @@
           <nav aria-label="On this page">
             <a href="#scope">Scope &amp; operator</a><a href="#local-data">Local app data</a
             ><a href="#credentials">Credentials &amp; authentication</a
+            ><a href="#purchases">Purchases &amp; access</a
             ><a href="#remote-servers">Your remote servers</a
             ><a href="#files-exports">Imports, exports &amp; clipboard</a
             ><a href="#diagnostics">Diagnostics &amp; support</a
@@ -111,6 +113,51 @@
               system guidance, not a guarantee. No iCloud sync entitlement is configured.
               Current-candidate OS-level protection and lifecycle behavior still require physical
               acceptance.
+            </p>
+          </section>
+          <section id="purchases">
+            <h2>Purchases &amp; clock state</h2>
+            <p>
+              The planned launch model is a free download, an explicitly started seven-day
+              full-function trial and a US $14.99 one-time lifetime unlock, with localized Apple
+              prices elsewhere, no subscription and no automatic charge. StoreKit/payment validation
+              on a compatible later binary remains pending.
+            </p>
+            <p>
+              Apple processes the app's purchases, payments and applicable refunds. Termforge uses
+              StoreKit's verified product identifiers, original/purchase dates and
+              ownership/revocation state on device to compute trial or lifetime access. StoreKit
+              manages locally available transaction history. The app listens for entitlement updates
+              and offers explicit restore; no Termforge account or licensing backend receives
+              purchase records, and no persisted isPro flag grants access. The app does not request
+              your card details or Apple credentials through its own forms.
+            </p>
+            <p>
+              A non-synchronizing, device-only Keychain item stores a last-observed timestamp to
+              detect simple device-clock rollback. This item grants no access, is separate from SSH
+              credential protection, and may survive app removal. A corrected clock plus explicit
+              online restore can recover suspicious clock state after verified ownership is
+              rechecked. There is no continuously trusted time service, device fingerprint or
+              promise of perfect tamper resistance.
+            </p>
+            <p>
+              Trial expiry removes no hosts, keys, settings, files or local drafts. Existing local
+              retention, authentication, export and deletion rules still apply. Removing the app
+              does not delete Apple's purchase history, remote data, exported copies or necessarily
+              Keychain items. The current clock item is retained for proportionate rollback checks;
+              it does not identify an Apple account or contain payment information.
+            </p>
+            <p>
+              Purchase errors shown in the app are allowlisted categories, not raw transactions or
+              payment data. If you voluntarily seek support, provide redacted app/build/device
+              details and safe reproduction steps; never send Apple credentials, payment details or
+              unredacted receipts. Operator/contact and correspondence-retention practices remain
+              pending below.
+            </p>
+            <p>
+              This static website has no checkout, trial activation, purchase tracking or
+              transaction integration. Reading its planned offer does not send app purchase history
+              to the website. Hosting logs and Apple's own platform practices remain separate.
             </p>
           </section>
           <section id="credentials">
@@ -238,10 +285,10 @@
               alone does not establish a separate hosted data service.
             </p>
             <p>
-              Apple handles app distribution and operating-system services under its practices.
-              Chosen remote hosts, network providers, and Files providers may process your data.
-              Final SDK/archive privacy declarations and dependency/notice review remain
-              public-release requirements.
+              Apple handles app distribution, StoreKit purchase/payment processing, refunds and
+              operating-system services under its practices. Chosen remote hosts, network providers,
+              and Files providers may process your data. Final SDK/archive privacy declarations and
+              dependency/notice review remain public-release requirements.
             </p>
             <p>
               <span class="pending"

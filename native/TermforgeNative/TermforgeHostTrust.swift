@@ -115,6 +115,7 @@ internal final class TermforgeTrustLease: NIOSSHClientServerAuthenticationDelega
   func checkCurrent() async throws {
     try await MainActor.run {
       try TermforgeAppLock.shared.requireUnlocked()
+      try TermforgeAccessService.shared.requireRemoteAccess()
       guard TermforgeAppLock.shared.revision == self.lockRevision,
             TermforgeSessionRegistry.shared.isCurrent(id: self.sessionId, generation: self.generation) else { throw CancellationError() }
     }

@@ -3,6 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import {
   Alert,
   AppState,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -65,6 +66,15 @@ const terminalThemes = [
 ] as const;
 
 export default function TerminalScreen() {
+  const [keyboardVisible, setKeyboardVisible] = useState(() => Keyboard.isVisible());
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
   const theme = useTheme();
   const safeArea = useSafeAreaInsets();
   const { serverId, paneId, snippet } = useLocalSearchParams<{
@@ -711,17 +721,9 @@ export default function TerminalScreen() {
       <KeyboardAvoidingView
         style={styles.terminalPage}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={safeArea.top}
       >
-        <View
-          style={[
-            styles.statusSafeArea,
-            {
-              paddingTop: safeArea.top,
-              paddingLeft: safeArea.left,
-              paddingRight: safeArea.right,
-            },
-          ]}
-        >
+        <View style={styles.statusSafeArea}>
           <View style={styles.statusBar}>
             <Text style={styles.statusText}>
               {form.username}@{form.host} · {state}
@@ -1009,92 +1011,110 @@ export default function TerminalScreen() {
               foregroundColor={terminalTheme.foreground}
               backgroundColor={terminalTheme.background}
             />
-            <ScrollView
-              horizontal
-              keyboardShouldPersistTaps="always"
-              style={styles.keyBar}
-              contentContainerStyle={styles.keyBarContent}
-            >
-              {(
-                [
-                  ['Esc', 'escape'],
-                  ['Tab', 'tab'],
-                  ['Ctrl-C', 'ctrlC'],
-                  ['Ctrl-D', 'ctrlD'],
-                  ['←', 'left'],
-                  ['↑', 'up'],
-                  ['↓', 'down'],
-                  ['→', 'right'],
-                  ['F1', 'f1'],
-                  ['F2', 'f2'],
-                  ['F3', 'f3'],
-                  ['F4', 'f4'],
-                  ['F5', 'f5'],
-                  ['F6', 'f6'],
-                  ['F7', 'f7'],
-                  ['F8', 'f8'],
-                  ['F9', 'f9'],
-                  ['F10', 'f10'],
-                  ['F11', 'f11'],
-                  ['F12', 'f12'],
-                ] as const
-              )
-                .filter(([, key]) => accessoryPreset === 'extended' || !key.startsWith('f'))
-                .map(([label, key]) => (
-                  <Pressable
-                    key={key}
-                    onPress={() => void TermforgeNative.sendKey(sessionId, key)}
-                    style={styles.keyButton}
-                  >
-                    <Text style={styles.keyText}>{label}</Text>
-                  </Pressable>
-                ))}
-              <Pressable onPress={() => setSearchOpen(true)} style={styles.keyButton}>
-                <Text style={styles.keyText}>Find</Text>
-              </Pressable>
+            <View style={styles.keyboardToolbar}>
               <Pressable
-                onPress={() => setTextComposerOpen((value) => !value)}
-                style={styles.keyButton}
+                accessibilityRole="button"
+                accessibilityLabel={keyboardVisible ? 'Hide keyboard' : 'Show keyboard'}
+                accessibilityHint="Hiding the keyboard keeps your terminal session connected."
+                style={styles.keyboardToggle}
+                onPress={() => {
+                  if (keyboardVisible) Keyboard.dismiss();
+                  void TermforgeNative.setKeyboardVisible(sessionId, !keyboardVisible).catch(
+                    (caught: unknown) => setError(safeError(caught).safeMessage),
+                  );
+                }}
               >
-                <Text style={styles.keyText}>Unicode</Text>
+                <Text style={styles.keyText}>
+                  {keyboardVisible ? 'Hide keyboard' : 'Show keyboard'}
+                </Text>
               </Pressable>
-              <Pressable
-                onPress={() => void TermforgeNative.pasteClipboard(sessionId)}
-                style={styles.keyButton}
+              <ScrollView
+                horizontal
+                keyboardShouldPersistTaps="always"
+                style={styles.keyBar}
+                contentContainerStyle={styles.keyBarContent}
               >
-                <Text style={styles.keyText}>Paste</Text>
-              </Pressable>
-              <Pressable
-                onPress={() =>
-                  void TermforgeNative.shareClipboard().catch((caught: unknown) =>
-                    setError(safeError(caught).safeMessage),
-                  )
-                }
-                style={styles.keyButton}
-              >
-                <Text style={styles.keyText}>Share</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void TermforgeNative.clearScrollback(sessionId)}
-                style={styles.keyButton}
-              >
-                <Text style={styles.keyText}>Clear history</Text>
-              </Pressable>
-              <Pressable onPress={() => changeFontSize(-1)} style={styles.keyButton}>
-                <Text style={styles.keyText}>A−</Text>
-              </Pressable>
-              <Pressable onPress={() => changeFontSize(1)} style={styles.keyButton}>
-                <Text style={styles.keyText}>A+</Text>
-              </Pressable>
-              <Pressable
-                onPress={() =>
-                  setTerminalThemeIndex((value) => (value + 1) % terminalThemes.length)
-                }
-                style={styles.keyButton}
-              >
-                <Text style={styles.keyText}>{terminalTheme.name}</Text>
-              </Pressable>
-            </ScrollView>
+                {(
+                  [
+                    ['Esc', 'escape'],
+                    ['Tab', 'tab'],
+                    ['Ctrl-C', 'ctrlC'],
+                    ['Ctrl-D', 'ctrlD'],
+                    ['←', 'left'],
+                    ['↑', 'up'],
+                    ['↓', 'down'],
+                    ['→', 'right'],
+                    ['F1', 'f1'],
+                    ['F2', 'f2'],
+                    ['F3', 'f3'],
+                    ['F4', 'f4'],
+                    ['F5', 'f5'],
+                    ['F6', 'f6'],
+                    ['F7', 'f7'],
+                    ['F8', 'f8'],
+                    ['F9', 'f9'],
+                    ['F10', 'f10'],
+                    ['F11', 'f11'],
+                    ['F12', 'f12'],
+                  ] as const
+                )
+                  .filter(([, key]) => accessoryPreset === 'extended' || !key.startsWith('f'))
+                  .map(([label, key]) => (
+                    <Pressable
+                      key={key}
+                      onPress={() => void TermforgeNative.sendKey(sessionId, key)}
+                      style={styles.keyButton}
+                    >
+                      <Text style={styles.keyText}>{label}</Text>
+                    </Pressable>
+                  ))}
+                <Pressable onPress={() => setSearchOpen(true)} style={styles.keyButton}>
+                  <Text style={styles.keyText}>Find</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setTextComposerOpen((value) => !value)}
+                  style={styles.keyButton}
+                >
+                  <Text style={styles.keyText}>Unicode</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void TermforgeNative.pasteClipboard(sessionId)}
+                  style={styles.keyButton}
+                >
+                  <Text style={styles.keyText}>Paste</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    void TermforgeNative.shareClipboard().catch((caught: unknown) =>
+                      setError(safeError(caught).safeMessage),
+                    )
+                  }
+                  style={styles.keyButton}
+                >
+                  <Text style={styles.keyText}>Share</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void TermforgeNative.clearScrollback(sessionId)}
+                  style={styles.keyButton}
+                >
+                  <Text style={styles.keyText}>Clear history</Text>
+                </Pressable>
+                <Pressable onPress={() => changeFontSize(-1)} style={styles.keyButton}>
+                  <Text style={styles.keyText}>A−</Text>
+                </Pressable>
+                <Pressable onPress={() => changeFontSize(1)} style={styles.keyButton}>
+                  <Text style={styles.keyText}>A+</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    setTerminalThemeIndex((value) => (value + 1) % terminalThemes.length)
+                  }
+                  style={styles.keyButton}
+                >
+                  <Text style={styles.keyText}>{terminalTheme.name}</Text>
+                </Pressable>
+              </ScrollView>
+            </View>
           </>
         )}
         {editor ? (
@@ -1145,11 +1165,32 @@ export default function TerminalScreen() {
             </View>
             <Text style={styles.forwardHint}>
               Saving writes a temporary sibling then replaces the remote file. A changed remote
-              fingerprint blocks the save.
+              fingerprint blocks the save. Copy or save your local draft to Files even when remote
+              access is paused.
             </Text>
             <View style={styles.editorActions}>
-              <Pressable onPress={() => void saveEditor()}>
-                <Text style={styles.toolActive}>Save</Text>
+              <Pressable accessibilityRole="button" onPress={() => void saveEditor()}>
+                <Text style={styles.toolActive}>Save remote</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  void TermforgeNative.copyText(editor.text).catch((caught: unknown) =>
+                    setError(safeError(caught).safeMessage),
+                  )
+                }
+              >
+                <Text style={styles.toolActive}>Copy draft</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  void TermforgeNative.saveTextDraftToFiles(editor.text).catch((caught: unknown) =>
+                    setError(safeError(caught).safeMessage),
+                  )
+                }
+              >
+                <Text style={styles.toolActive}>Save draft to Files</Text>
               </Pressable>
               <Pressable onPress={() => setEditor(undefined)}>
                 <Text style={styles.disconnect}>Discard</Text>
@@ -1443,7 +1484,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     fontFamily: 'Courier',
   },
-  editorActions: { flexDirection: 'row', gap: 18 },
+  editorActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
   editorFind: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   renameBar: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   pathInput: {
@@ -1464,7 +1505,15 @@ const styles = StyleSheet.create({
   fileMain: { flex: 1, gap: 3 },
   fileName: { color: '#f9fafb', flex: 1 },
   fileMeta: { color: '#9ca3af' },
-  keyBar: { flexGrow: 0, backgroundColor: '#111827' },
+  keyboardToolbar: { flexDirection: 'row', alignItems: 'stretch', backgroundColor: '#111827' },
+  keyboardToggle: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#4b5563',
+  },
+  keyBar: { flex: 1, backgroundColor: '#111827' },
   keyBarContent: { gap: 6, paddingHorizontal: 8, paddingVertical: 6 },
   keyButton: {
     borderColor: '#4b5563',

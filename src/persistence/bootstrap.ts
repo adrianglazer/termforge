@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { TermforgeNative } from '@/native/termforgeNative';
 import { AppError } from '@/application/errors';
 import { applyMigrations } from './migrations';
+import { storageStep } from './startupError';
 
 let opening: Promise<SQLite.SQLiteDatabase> | undefined;
 let blocked = false;
@@ -15,15 +16,19 @@ export function openMetadataDatabase(): Promise<SQLite.SQLiteDatabase> {
   opening ??= (async () => {
     await previousClose;
     if (blocked) throw new AppError('KEY_LOCKED', 'Unlock Termforge to access metadata.');
-    const directory = await TermforgeNative.prepareMetadataStorage();
-    const database = await SQLite.openDatabaseAsync('termforge-metadata.db', {}, directory);
+    const directory = await storageStep('storage-prepare', () =>
+      TermforgeNative.prepareMetadataStorage(),
+    );
+    const database = await storageStep('database-open', () =>
+      SQLite.openDatabaseAsync('termforge-metadata.db', {}, directory),
+    );
     try {
-      await applyMigrations(database);
+      await storageStep('database-migrate', () => applyMigrations(database));
       // Cover pre-existing files and newly created database/WAL/SHM files.
-      await TermforgeNative.prepareMetadataStorage();
+      await storageStep('storage-protect', () => TermforgeNative.prepareMetadataStorage());
       return database;
     } catch (error) {
-      await database.closeAsync();
+      await database.closeAsync().catch(() => undefined);
       throw error;
     }
   })().catch((error: unknown) => {

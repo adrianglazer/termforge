@@ -32,6 +32,7 @@
         <nav class="nav" aria-label="Main navigation">
           <a href="./#features">Features</a>
           <a href="./#demo">Demo</a>
+          <a href="./#pricing">Pricing</a>
           <a href="./#faq">FAQ</a>
           <a href="support" aria-current="page">Support</a>
           <!-- APP_STORE_URL: replace with the verified listing URL. -->
@@ -65,6 +66,7 @@
           <h2>On this page</h2>
           <nav aria-label="On this page">
             <a href="#getting-started">Getting started</a
+            ><a href="#purchases">Trial &amp; purchases</a
             ><a href="#connections">Connection failures</a
             ><a href="#authentication">Passwords &amp; SSH keys</a
             ><a href="#host-keys">Host-key warnings</a
@@ -78,6 +80,12 @@
           <section id="getting-started">
             <h2>Getting started</h2>
             <ol>
+              <li>
+                <strong>Choose app access.</strong> In the planned launch flow, start the free 7-day
+                Trial, buy lifetime access immediately, or restore a purchase through Apple. The
+                website cannot start a trial. StoreKit validation and public availability remain
+                pending.
+              </li>
               <li>
                 <strong>Check access.</strong> Use an iPhone with iOS 17 or later and an SSH server
                 you are authorized to access. Confirm the host, SSH port, username, and a supported
@@ -112,6 +120,74 @@
             <p>
               A server-side tool such as tmux can preserve remote processes between connections.
               Termforge itself closes sessions on background or idle lock.
+            </p>
+          </section>
+          <section id="purchases">
+            <h2>Trial &amp; purchases</h2>
+            <p>
+              The planned launch offer is a free download and explicitly started seven-day
+              full-function trial, followed by a US $14.99 one-time lifetime unlock. No subscription
+              or automatic charge. $14.99 is the US price; Apple's localized pricing applies
+              elsewhere. Purchase validation requires a compatible later binary and remains pending.
+            </p>
+            <h3>Start, buy or restore</h3>
+            <p>
+              Open Welcome, Access or Settings. Start 7-day Trial acquires Apple's free
+              non-consumable product; only a verified completion starts the original 168-hour
+              period. Settings shows the precise expiration date/time in the device's time zone. Buy
+              Lifetime is available immediately; the app shows StoreKit's localized price and the
+              Apple purchase sheet supplies the applicable price. Missing product information shows
+              unavailable rather than a guessed price.
+            </p>
+            <p>
+              Use Restore Purchases explicitly with the original App Store account. Apple may
+              request authentication. Restoring on the same account, reinstalling or using a new
+              device recovers the original trial or lifetime purchase; it does not reset seven days.
+              Cross-account recovery and Family Sharing are not promised. If nothing restores, check
+              the account used for the original acquisition.
+            </p>
+            <h3>Canceled, pending or unavailable</h3>
+            <p>
+              A canceled purchase does not start a trial or change existing access. Pending Apple
+              approval also leaves existing access intact; a later verified transaction updates
+              access automatically while the app is running. For missing products, store/network
+              errors or failed verification, connect to the internet, retry and then restore if
+              needed. Avoid assuming payment completed based only on a spinner or approval request.
+            </p>
+            <h3>Expiration and interrupted work</h3>
+            <p>
+              At trial expiry all active and new remote work stops: SSH/reconnects, command-running
+              snippets, SFTP operations/transfers, forwarding and jump-host routes. A short warning
+              appears before the boundary. Transfers may be partial; inspect remote files before
+              deliberately retrying. Closing SSH does not guarantee remote processes stop. Saved
+              hosts, keys, settings and local drafts remain, with safe local recovery, copy/export,
+              deletion, support and purchase/restore available under the same authentication policy.
+            </p>
+            <h3>Offline access and device time</h3>
+            <p>
+              Locally available verified lifetime ownership works offline; product-price loading
+              failure alone does not remove it. A verified trial still expires offline. With no
+              verifiable state after a fresh install, connect and restore rather than expecting a
+              new trial. For a backward-clock warning, enable automatic date and time in iOS
+              Settings, correct the clock, then retry. If the warning persists, Restore Purchases
+              while online to recheck Apple transaction state and recover clock state. This
+              proportionate safeguard is not perfect protection against device tampering.
+            </p>
+            <h3>Refunded or revoked purchases</h3>
+            <p>
+              Apple refunds or revocations remove lifetime access when StoreKit reports them; a
+              separately valid trial can still apply. Use the original account and restore online to
+              reconcile ownership. Apple handles applicable refunds under its terms and consumer
+              rights; this guide makes no refund guarantee or perpetual OS-support promise.
+            </p>
+            <p>
+              For purchase help, provide only the app/build, iPhone/iOS version, redacted error
+              code, whether the action was start/buy/restore, and reproduction steps.
+              <strong
+                >Never send Apple credentials, payment information, receipts containing personal
+                data, passwords or private keys.</strong
+              >
+              Direct support contact remains pending owner input.
             </p>
           </section>
           <section id="connections">

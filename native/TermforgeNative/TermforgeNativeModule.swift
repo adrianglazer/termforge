@@ -130,13 +130,18 @@ internal final class TermforgeSessionRegistry {
   var event: ((String, [String: Any]) -> Void)?
 
   func installLifecycleProtection() {
-    TermforgeAppLock.shared.install {
-      for id in Array(self.sessions.keys) { self.close(id: id) }
-    }
+    TermforgeAppLock.shared.install { self.closeAll() }
+    TermforgeAccessService.shared.teardown = { self.closeAll() }
+    TermforgeAccessService.shared.install()
+  }
+
+  private func closeAll() {
+    for id in Array(sessions.keys) { close(id: id) }
   }
 
   func create() throws -> String {
     try TermforgeAppLock.shared.requireUnlocked()
+    try TermforgeAccessService.shared.requireRemoteAccess()
     guard sessions.count < 8, UIApplication.shared.applicationState == .active else {
       throw Exception(name: "RESOURCE_LIMIT", description: "Open at most eight foreground sessions.")
     }
@@ -166,6 +171,11 @@ internal final class TermforgeSessionRegistry {
     view.sessionId = sessionId
   }
 
+  func beginInspection() throws -> (String, TermforgeForwardChannels) {
+    let id = try create()
+    return (id, sessions[id]!.transports)
+  }
+
   struct JumpConnection: Sendable {
     let host: String
     let port: Int
@@ -189,6 +199,7 @@ internal final class TermforgeSessionRegistry {
                credentialReference: String? = nil, jump: JumpConnection? = nil, isKey: Bool = false,
                authentication: @escaping @Sendable () async throws -> NIOSSHUserAuthenticationOffer) throws {
     try TermforgeAppLock.shared.requireUnlocked()
+    try TermforgeAccessService.shared.requireRemoteAccess()
     guard UIApplication.shared.applicationState == .active, let session = sessions[id], session.task == nil else { throw Exception(name: "INVALID_CONFIG", description: "Session is missing or already connected.") }
     guard (1...65535).contains(port), !host.isEmpty, !host.contains("\0"),
           (1...1000).contains(columns), (1...1000).contains(rows) else {
@@ -204,6 +215,7 @@ internal final class TermforgeSessionRegistry {
         var connectedClient: SSHClient?
         while connectedClient == nil {
           try Task.checkCancellation()
+          try TermforgeAccessService.shared.requireRemoteAccess()
           guard self.sessions[id] === session else { throw CancellationError() }
           let targetLease = targetApproval.forGeneration(session.generation)
           let jumpLease = jumpApproval?.forGeneration(session.generation)
@@ -246,6 +258,7 @@ internal final class TermforgeSessionRegistry {
           try? await client.close()
           throw CancellationError()
         }
+        try TermforgeAccessService.shared.requireRemoteAccess()
         session.client = client
         self.emit(session, "connected")
         let request = SSHChannelRequestEvent.PseudoTerminalRequest(
@@ -259,6 +272,7 @@ internal final class TermforgeSessionRegistry {
         )
         try await client.withPTY(request) { inbound, outbound in
           try await MainActor.run {
+            try TermforgeAccessService.shared.requireRemoteAccess()
             guard self.sessions[id] === session else { throw CancellationError() }
             session.writer = outbound; self.emit(session, "ready")
           }
@@ -269,8 +283,9 @@ internal final class TermforgeSessionRegistry {
               bytes = buffer.readBytes(length: buffer.readableBytes) ?? []
             }
             try Task.checkCancellation()
+            try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
             if !bytes.isEmpty { await MainActor.run {
-              if self.sessions[id] === session { session.view?.feed(bytes) }
+              if (try? TermforgeAccessService.shared.requireRemoteAccess()) != nil, self.sessions[id] === session { session.view?.feed(bytes) }
             } }
           }
         }
@@ -302,6 +317,7 @@ internal final class TermforgeSessionRegistry {
   }
 
   func write(id: String, bytes: [UInt8]) {
+    guard (try? TermforgeAccessService.shared.requireRemoteAccess()) != nil else { return }
     guard let session = sessions[id], let writer = session.writer else { return }
     guard bytes.count <= 16 * 1024, session.queuedInputBytes + bytes.count <= 64 * 1024 else {
       emit(session, "failed", values: ["code": "RESOURCE_LIMIT", "message": "Terminal input exceeded the pending input limit."])
@@ -316,12 +332,14 @@ internal final class TermforgeSessionRegistry {
       defer { session.queuedInputBytes -= bytes.count }
       if let previous { await previous.value }
       guard !Task.isCancelled, self.sessions[id] === session else { return }
+      guard (try? TermforgeAccessService.shared.requireRemoteAccess()) != nil else { return }
       try? await writer.write(ByteBuffer(bytes: bytes))
       if session.writeSequence == sequence { session.writeTask = nil }
     }
   }
 
   func resize(id: String, columns: Int, rows: Int, width: Int, height: Int) {
+    guard (try? TermforgeAccessService.shared.requireRemoteAccess()) != nil else { return }
     guard columns > 0, rows > 0, let session = sessions[id], session.writer != nil else { return }
     session.pendingResize = (columns, rows, width, height)
     guard session.resizeTask == nil else { return }
@@ -335,13 +353,20 @@ internal final class TermforgeSessionRegistry {
         return
       }
       session.pendingResize = nil
+      guard (try? TermforgeAccessService.shared.requireRemoteAccess()) != nil else { return }
       try? await writer.changeSize(cols: size.columns, rows: size.rows, pixelWidth: size.width, pixelHeight: size.height)
       session.resizeTask = nil
     }
   }
 
+  func setKeyboardVisible(id: String, visible: Bool) throws {
+    guard let view = sessions[id]?.view else { throw Exception(name: "INVALID_CONFIG", description: "The terminal view is not attached.") }
+    try view.setKeyboardVisible(visible)
+  }
+
   func sendKey(id: String, key: String) throws {
     try TermforgeAppLock.shared.requireUnlocked()
+    try TermforgeAccessService.shared.requireRemoteAccess()
     TermforgeAppLock.shared.recordActivity()
     guard let view = sessions[id]?.view else { throw Exception(name: "INVALID_CONFIG", description: "The terminal view is not attached.") }
     try view.sendSemanticKey(key)
@@ -349,6 +374,7 @@ internal final class TermforgeSessionRegistry {
 
   func sendText(id: String, text: String) throws {
     try TermforgeAppLock.shared.requireUnlocked()
+    try TermforgeAccessService.shared.requireRemoteAccess()
     TermforgeAppLock.shared.recordActivity()
     guard text.utf8.count <= 16 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Terminal text input is limited to 16 KiB.") }
     write(id: id, bytes: Array(text.utf8))
@@ -439,6 +465,7 @@ internal final class TermforgeSessionRegistry {
 
   func reserveForward(id: String) throws -> (String, TermforgeForwardChannels) {
     try TermforgeAppLock.shared.requireUnlocked()
+    try TermforgeAccessService.shared.requireRemoteAccess()
     guard let session = sessions[id], session.client != nil, Set(session.localForwards.keys).union(session.forwards.keys).count < 4 else {
       throw Exception(name: "RESOURCE_LIMIT", description: "Connect first and use at most four forwards per session.")
     }
@@ -450,6 +477,7 @@ internal final class TermforgeSessionRegistry {
 
   func client(id: String) throws -> SSHClient {
     try TermforgeAppLock.shared.requireUnlocked()
+    try TermforgeAccessService.shared.requireRemoteAccess()
     guard let client = sessions[id]?.client else {
       throw Exception(name: "INVALID_CONFIG", description: "The SSH session is not connected.")
     }
@@ -527,13 +555,14 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
   func definition() -> ModuleDefinition {
     _ = Self.configureLogging
     let moduleName: any AnyDefinition = Name("TermforgeNative")
-    let moduleEvents: any AnyDefinition = Events("onSessionState", "onTerminalTitle", "onTerminalBell", "onTransferProgress", "onForwardState", "onSecurityState")
+    let moduleEvents: any AnyDefinition = Events("onSessionState", "onTerminalTitle", "onTerminalBell", "onTransferProgress", "onForwardState", "onSecurityState", "onAccessState")
 
     let onCreate: any AnyDefinition = OnCreate {
       Task<Void, Never> { @MainActor in
         TermforgeAppLock.shared.changed = { [weak self] locked, revision in
           self?.sendEvent("onSecurityState", ["locked": locked, "revision": revision])
         }
+        TermforgeAccessService.shared.changed = { [weak self] state in self?.sendEvent("onAccessState", state) }
         TermforgeSessionRegistry.shared.installLifecycleProtection()
         TermforgeSessionRegistry.shared.event = { [weak self] name, body in self?.sendEvent(name, body) }
       }
@@ -564,6 +593,21 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
       defer { raw.resetBytes(in: 0..<raw.count) }
       try await MainActor.run { try TermforgeAppLock.shared.requireUnlocked() }
       try TermforgeCredentialInventory.shared.associate(reference: reference)
+    }
+
+    let accessStateDefinition: any AnyDefinition = AsyncFunction("accessState") { () async -> [String: Any] in
+      await MainActor.run { TermforgeAccessService.shared.snapshot() }
+    }
+    let refreshAccessDefinition: any AnyDefinition = AsyncFunction("refreshAccess") { () async -> [String: Any] in
+      await TermforgeAccessService.shared.reload()
+      await TermforgeAccessService.shared.loadProducts()
+      return await MainActor.run { TermforgeAccessService.shared.snapshot() }
+    }
+    let purchaseAccessDefinition: any AnyDefinition = AsyncFunction("purchaseAccess") { (kind: String) async -> [String: Any] in
+      await TermforgeAccessService.shared.purchase(kind)
+    }
+    let restorePurchasesDefinition: any AnyDefinition = AsyncFunction("restorePurchases") { () async -> [String: Any] in
+      await TermforgeAccessService.shared.restore()
     }
 
     let securityStateDefinition: any AnyDefinition = AsyncFunction("securityState") { () async -> [String: Any] in
@@ -612,6 +656,9 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
       await TransferCancellationRegistry.shared.cancelAll(sessionId: id)
       await MainActor.run { TermforgeSessionRegistry.shared.close(id: id) }
     }
+    let keyboardDefinition: any AnyDefinition = AsyncFunction("setKeyboardVisible") { (id: String, visible: Bool) async throws -> Void in
+      try await MainActor.run { try TermforgeSessionRegistry.shared.setKeyboardVisible(id: id, visible: visible) }
+    }
     let sendKeyDefinition: any AnyDefinition = AsyncFunction("sendKey") { (id: String, key: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.sendKey(id: id, key: key) } }
     let sendTextDefinition: any AnyDefinition = AsyncFunction("sendText") { (id: String, text: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.sendText(id: id, text: text) } }
     let pasteClipboardDefinition: any AnyDefinition = AsyncFunction("pasteClipboard") { (id: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.pasteClipboard(id: id) } }
@@ -623,6 +670,9 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
     }
     let saveFileToFilesDefinition: any AnyDefinition = AsyncFunction("saveFileToFiles") { (handle: String) async throws -> Void in
       try await MainActor.run { try self.saveFileToFiles(handle: handle) }
+    }
+    let saveTextDraftToFilesDefinition: any AnyDefinition = AsyncFunction("saveTextDraftToFiles") { (text: String) async throws -> Void in
+      try await MainActor.run { try self.saveTextDraftToFiles(text: text) }
     }
     let searchTerminalDefinition: any AnyDefinition = AsyncFunction("searchTerminal") { (id: String, term: String, direction: String, caseSensitive: Bool) async throws -> [String: Int] in try await MainActor.run { try TermforgeSessionRegistry.shared.search(id: id, term: term, direction: direction, caseSensitive: caseSensitive) } }
     let clearScrollbackDefinition: any AnyDefinition = AsyncFunction("clearScrollback") { (id: String) async throws -> Void in try await MainActor.run { try TermforgeSessionRegistry.shared.clearScrollback(id: id) } }
@@ -721,6 +771,7 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
       credentialStatesDefinition,
       orphanedKeysDefinition,
       reassociateKeyDefinition,
+      accessStateDefinition, refreshAccessDefinition, purchaseAccessDefinition, restorePurchasesDefinition,
       securityStateDefinition,
       autoLockDefinition,
       pickLocalFileDefinition,
@@ -728,12 +779,14 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
       createSessionDefinition,
       connectPasswordDefinition,
       disconnectDefinition,
+      keyboardDefinition,
       sendKeyDefinition,
       sendTextDefinition,
       pasteClipboardDefinition,
       copyTextDefinition,
       shareClipboardDefinition,
       saveFileToFilesDefinition,
+      saveTextDraftToFilesDefinition,
       searchTerminalDefinition,
       clearScrollbackDefinition,
       importEd25519KeyDefinition,
@@ -787,12 +840,14 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
 
   @MainActor
   private func copyText(text: String) throws -> Void {
+    try TermforgeAppLock.shared.requireUnlocked()
     guard text.utf8.count <= 64 * 1024 else { throw Exception(name: "RESOURCE_LIMIT", description: "Clipboard text is too large.") }
     UIPasteboard.general.string = text
   }
 
   @MainActor
   private func shareClipboard() throws -> Void {
+    try TermforgeAppLock.shared.requireUnlocked()
     guard let text = UIPasteboard.general.string, !text.isEmpty else {
       throw Exception(name: "INVALID_CONFIG", description: "Copy terminal text before sharing it.")
     }
@@ -809,6 +864,7 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
 
   @MainActor
   private func saveFileToFiles(handle: String) throws -> Void {
+    try TermforgeAppLock.shared.requireUnlocked()
     let url = try TermforgeFileAccess.shared.resolve(handle, kind: "download", consume: false)
     guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),
           let presenter = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
@@ -816,6 +872,34 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
     }
     let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
     presenter.present(picker, animated: true)
+  }
+
+  @MainActor
+  private func saveTextDraftToFiles(text: String) throws -> Void {
+    try TermforgeAppLock.shared.requireUnlocked()
+    guard text.utf8.count <= 2 * 1024 * 1024 else {
+      throw Exception(name: "RESOURCE_LIMIT", description: "Draft export is limited to 2 MiB of UTF-8 text.")
+    }
+    let files = TermforgeFileAccess.shared
+    let epoch = files.currentEpoch()
+    var url = try files.temporaryFile()
+    var handle: String?
+    do {
+      let namedURL = url.appendingPathExtension("txt")
+      try FileManager.default.moveItem(at: url, to: namedURL)
+      url = namedURL
+      let output = try FileHandle(forWritingTo: url)
+      defer { try? output.close() }
+      try output.write(contentsOf: Data(text.utf8))
+      try output.close()
+      let published = try files.publish(url, kind: "download", epoch: epoch)
+      handle = published
+      try saveFileToFiles(handle: published)
+    } catch {
+      if let handle { files.discard(handle) }
+      try? FileManager.default.removeItem(at: url)
+      throw error
+    }
   }
 
   private func importEd25519Key(handle: String, protection: String) async throws -> [String: String] {
@@ -936,6 +1020,7 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
         var bytes: [UInt8] = []; var offset: UInt64 = 0; var digest = CryptoKit.SHA256()
         while offset < size {
           try Task.checkCancellation()
+          try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
           let length = UInt32(min(64 * 1024, size - offset))
           let chunk = try await file.read(from: offset, length: length)
           guard chunk.readableBytes > 0, chunk.readableBytes <= Int(length) else {
@@ -966,6 +1051,7 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
           var offset: UInt64 = 0
           while offset < size {
             try Task.checkCancellation()
+            try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
             let length = UInt32(min(64 * 1024, size - offset))
             let chunk = try await file.read(from: offset, length: length)
             guard chunk.readableBytes > 0, chunk.readableBytes <= Int(length) else {
@@ -976,9 +1062,12 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
         }
         let actualFingerprint = actual.finalize().map { String(format: "%02x", $0) }.joined()
         guard actualFingerprint == expectedFingerprint else { throw Exception(name: "CONFLICT", description: "The remote file changed after it was opened. Reload it before saving.") }
+        try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
         try await sftp.withFile(filePath: temporaryPath, flags: [.write, .create, .truncate]) { file in
+          try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
           try await file.write(ByteBuffer(data: data), at: 0)
         }
+        try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
         try await sftp.rename(at: remotePath, to: backupPath)
         do {
           try await sftp.rename(at: temporaryPath, to: remotePath)
@@ -999,7 +1088,10 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
   }
 
   private static func captureHostKey(host: String, port: Int, owned: TermforgeForwardChannels, jump: SSHClient? = nil) async throws -> String {
-    try await MainActor.run { try TermforgeAppLock.shared.requireUnlocked() }
+    try await MainActor.run {
+      try TermforgeAppLock.shared.requireUnlocked()
+      try TermforgeAccessService.shared.requireRemoteAccess()
+    }
     guard !host.isEmpty, !host.contains("\0"), host.utf8.count <= 253, (1...65535).contains(port) else {
       throw Exception(name: "INVALID_CONFIG", description: "The inspection endpoint is invalid.")
     }
@@ -1021,10 +1113,17 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
   }
 
   private static func inspectHostKey(host: String, port: Int) async throws -> [String: String] {
-    let owned = TermforgeForwardChannels()
-    defer { owned.close() }
-    let key = try await captureHostKey(host: host, port: port, owned: owned)
-    return try await inspectedIdentity(host: host, port: port, key: key)
+    let (id, owned) = try await MainActor.run { try TermforgeSessionRegistry.shared.beginInspection() }
+    do {
+      let key = try await captureHostKey(host: host, port: port, owned: owned)
+      try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
+      let identity = try await inspectedIdentity(host: host, port: port, key: key)
+      await MainActor.run { TermforgeSessionRegistry.shared.close(id: id) }
+      return identity
+    } catch {
+      await MainActor.run { TermforgeSessionRegistry.shared.close(id: id) }
+      throw error
+    }
   }
 
   private static func inspectHostKeyThroughJump(host: String, port: Int, jumpHost: String, jumpPort: Int, username: String, challengeId: String) async throws -> [[String: String]] {
@@ -1085,6 +1184,7 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
           var digest = CryptoKit.SHA256()
           while true {
             try Task.checkCancellation()
+            try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
             try await TransferCancellationRegistry.shared.check(sessionId: id, operationId: operationId)
             let chunk = try await file.read(from: offset, length: 64 * 1024)
             guard chunk.readableBytes > 0 else { break }
@@ -1131,6 +1231,7 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
         try await sftp.withFile(filePath: temporaryPath, flags: [.write, .create, .truncate]) { file in
           while true {
             try Task.checkCancellation()
+            try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
             try await TransferCancellationRegistry.shared.check(sessionId: id, operationId: operationId)
             let data = try input.read(upToCount: 64 * 1024) ?? Data()
             guard !data.isEmpty else { break }
@@ -1145,8 +1246,10 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
         }
         try await TransferCancellationRegistry.shared.check(sessionId: id, operationId: operationId)
         try Task.checkCancellation()
+        try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
         if overwrite {
           let backupPath = remotePath + ".termforge-backup-" + UUID().uuidString.lowercased()
+          try await MainActor.run { try TermforgeAccessService.shared.requireRemoteAccess() }
           try await sftp.rename(at: remotePath, to: backupPath)
           do {
             try await sftp.rename(at: temporaryPath, to: remotePath)

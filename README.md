@@ -37,11 +37,18 @@ npm start
 cannot load the Swift modules. Linux is the primary workstation; EAS performs
 signed iOS builds in the cloud. Local Xcode is optional. Follow
 [development](docs/development.md) and [EAS](docs/eas.md) before requesting a build.
-The consolidated production candidate is build 4; use that same artifact for
-TestFlight and the compact iPhone acceptance session. CI runs local checks only. Public App Store review is an explicit
+The task 08 production candidate is build 4; retain it for its historical
+TestFlight/device scope. Task 10 introduces native StoreKit changes, so trial
+and purchase validation require a later consolidated compatible candidate. CI runs local checks only. Public App Store review is an explicit
 owner action after acceptance and store materials are complete.
 
 See [troubleshooting](docs/troubleshooting.md), [App Store material draft](docs/app-store.md),
 [dependency advisories](docs/dependency-security-review.md) and
 [product requirements](instructions.md). Remaining dependency advisories have
 reachability assessments; the audit is not clean.
+
+The planned launch model is a free download, an explicitly started seven-day
+full-function trial, then a US $14.99 one-time lifetime unlock (localized prices
+elsewhere). No subscription or automatic charge. App code and all four standalone
+website pages implement this decision; Apple product setup and payment/device
+validation remain pending. See [monetization and release handoff](docs/monetization.md).

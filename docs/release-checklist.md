@@ -5,6 +5,33 @@ one consolidated production candidate after tasks 04–07, one compact physical
 session, upload the same artifact. Preserve historical evidence; record pending
 items honestly. No public submission is automated.
 
+## Task 10 later-candidate gates
+
+Build 4's evidence remains historical and does not validate new StoreKit code.
+The owner reports waiting for distribution; no current status was invented or
+new upload scheduled. Batch monetization with other ready native changes in the
+next consolidated candidate under `tasks/README.md`.
+
+- [ ] Verify existing IAPs/IDs, zero-price non-consumable 7-day Trial, US $14.99
+      lifetime non-consumable/localized prices, Family Sharing off, free app,
+      active agreements/tax/banking and In-App Purchase signing capability.
+- [ ] Apple-compile the changed access service/Keychain/inline module and inspect
+      the signed archive; no access/date override may enter a production build.
+- [ ] Run local Xcode StoreKit configuration plus sandbox/TestFlight purchase,
+      cancellation/pending/verification error, restore/original date, offline,
+      missing price, revocation/update and immediate-unlock acceptance.
+- [ ] On the same later candidate, verify foreground expiry/warning closes shell,
+      forward and transfer, denies native reconnect/SFTP/snippet/jump work, keeps
+      editor/local copy/export/delete accessible and respects existing app lock.
+- [ ] Verify clock correction/explicit restore recovery and actual localized
+      price/expiration/VoiceOver/purchase-sheet security cover behavior.
+- [ ] Use real later-candidate IAP screenshots and attach first non-consumables
+      to the applicable new app version only through an owner-authorized review.
+
+Precise implementation, metadata, evidence limits and focused Apple checks:
+[monetization](monetization.md). Website has the planned offer; published listing,
+legal/contact details and final payment evidence remain pending.
+
 ## Before the candidate
 
 - [ ] Record Node/npm/EAS versions; install from `package-lock.json` with `npm ci`.

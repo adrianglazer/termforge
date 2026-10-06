@@ -55,6 +55,9 @@ export function ScreenShell({
         <Link href="/palette" style={{ color: theme.accent }}>
           Palette
         </Link>
+        <Link href="/access" style={{ color: theme.accent }}>
+          Access
+        </Link>
         <Link href="/settings" style={{ color: theme.accent }}>
           Settings
         </Link>

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AccessPanel } from '@/access/AccessPanel';
 import { ScreenShell } from '@/components/ScreenShell';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -14,6 +15,7 @@ export default function OnboardingScreen() {
         message="A native iPhone SSH workstation—not a local Linux shell."
       />
       <ScrollView contentContainerStyle={styles.content}>
+        <AccessPanel />
         <Step
           number="1"
           title="Create a trusted server"

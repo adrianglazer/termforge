@@ -4,7 +4,7 @@ import UIKit
 import UniformTypeIdentifiers
 internal import ExpoModulesCore
 
-/// Only native picker results and native-created downloads can mint capabilities.
+/// Only native picker results and native-created downloads/draft exports can mint capabilities.
 /// No JS-supplied path grants authority. Capabilities expire on lock and after use.
 internal final class TermforgeFileAccess: @unchecked Sendable {
   static let shared = TermforgeFileAccess()

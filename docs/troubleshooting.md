@@ -67,3 +67,19 @@ replacement under [tasks/README.md](../tasks/README.md). No automatic retries.
 If the acknowledgement hook fails, check installed npm packages and the generated
 `ios/Pods/Target Support Files/Pods-Termforge/Pods-Termforge-acknowledgements.markdown`.
 Do not bypass missing archive notices or native provenance checks to get a green build.
+
+## Protected data fails to open on an unlocked device
+
+The older “Unlock the device and reopen Termforge” startup message also covered
+non-lock errors. A confirmed startup race allowed initialization before the app
+became active and prevented retry on the unchanged lock revision. The corrected
+startup gate waits for foreground and supplies a Retry button with a safe
+`Startup check` stage. This change must reach the installed app before Retry is
+available. Developer Mode does not resolve this application lifecycle defect.
+
+Keep the app in the foreground and use Retry on a corrected build. If it still
+fails, report the startup-check label, installed app/build number, iOS version,
+and whether this was a fresh install or an update. Do not send keys, passwords,
+or database contents. Do not delete/reinstall the app as a troubleshooting step:
+that can remove local metadata and drafts. Device verification remains pending;
+file protection and the app lock are intentionally retained.

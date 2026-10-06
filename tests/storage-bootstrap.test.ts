@@ -40,7 +40,7 @@ describe('protected metadata bootstrap', () => {
   it('does not open a database when initial protection fails, and permits a later retry', async () => {
     adapters.prepareMetadataStorage.mockRejectedValueOnce(new Error('unavailable'));
     const { openMetadataDatabase } = await import('@/persistence/bootstrap');
-    await expect(openMetadataDatabase()).rejects.toThrow('unavailable');
+    await expect(openMetadataDatabase()).rejects.toMatchObject({ stage: 'storage-prepare' });
     expect(adapters.openDatabaseAsync).not.toHaveBeenCalled();
     await expect(openMetadataDatabase()).resolves.toBeDefined();
     expect(adapters.openDatabaseAsync).toHaveBeenCalledTimes(1);
@@ -51,11 +51,24 @@ describe('protected metadata bootstrap', () => {
       .mockResolvedValueOnce('/protected/SQLite')
       .mockRejectedValueOnce(new Error('sidecar protection failed'));
     const { openMetadataDatabase } = await import('@/persistence/bootstrap');
-    await expect(openMetadataDatabase()).rejects.toThrow('sidecar protection failed');
+    await expect(openMetadataDatabase()).rejects.toMatchObject({ stage: 'storage-protect' });
     expect(adapters.closeAsync).toHaveBeenCalledTimes(1);
     await expect(openMetadataDatabase()).resolves.toBeDefined();
     expect(adapters.openDatabaseAsync).toHaveBeenCalledTimes(2);
   });
+  it('identifies database-open and migration failures without displaying native details', async () => {
+    adapters.openDatabaseAsync.mockRejectedValueOnce(new Error('/private/sensitive/path'));
+    const { openMetadataDatabase } = await import('@/persistence/bootstrap');
+    await expect(openMetadataDatabase()).rejects.toMatchObject({
+      stage: 'database-open',
+      message: 'Protected storage initialization failed.',
+    });
+    adapters.applyMigrations.mockRejectedValueOnce(new Error('private SQL details'));
+    await expect(openMetadataDatabase()).rejects.toMatchObject({ stage: 'database-migrate' });
+    expect(adapters.closeAsync).toHaveBeenCalledTimes(1);
+    await expect(openMetadataDatabase()).resolves.toBeDefined();
+  });
+
   it('blocks new opens while locked and waits for closure before reopening', async () => {
     const { openMetadataDatabase, suspendMetadataStorage, resumeMetadataStorage } =
       await import('@/persistence/bootstrap');

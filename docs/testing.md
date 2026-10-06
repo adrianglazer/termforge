@@ -166,3 +166,92 @@ inspection JSON and cloud logs are retained in ignored `.release/`/`native/.buil
 Task 08 records distribution/processing results and the compact physical checklist.
 No installation, biometric/Keychain, Files-provider, lifecycle, accessibility or
 four-session device result is inferred from a compiled or uploaded binary.
+
+### Terminal keyboard toggle — 2026-10-06
+
+The terminal accessory toolbar now keeps a Hide keyboard / Show keyboard button
+fixed beside the horizontally scrolling shortcuts. Hide ends native editing and
+releases terminal focus without disconnecting or replacing the terminal; Show
+focuses the attached terminal. Existing tap-to-focus behavior is unchanged. The
+button label follows iOS keyboard visibility events, including composer/search
+input, rather than assuming a button press is the only way to open the keyboard.
+
+Local validation: 73 JavaScript tests passed, with lint, TypeScript, formatting,
+and Swift syntax parsing for both changed native files passing. Linux parsing
+does not verify UIKit compilation or keyboard behavior. Include this native change
+in the next consolidated candidate; no extra EAS build was run for it.
+
+Pending candidate smoke: on a connected terminal, tap to type, hide the keyboard,
+confirm the terminal expands and output/session continue, then tap the terminal
+and use Show keyboard to reopen it. Check portrait/landscape and dismissing the
+Unicode composer/search keyboard; verify the toggle remains visible while the
+shortcut row scrolls. Confirm PTY resize follows the available terminal area.
+
+### Protected-data startup failure — 2026-10-06
+
+A tester reported that the distributed candidate immediately showed “Protected
+storage could not be opened” on an unlocked device. This is an unresolved device
+acceptance blocker until a corrected candidate launches successfully; prior local
+SQLite tests did not establish iOS startup behavior.
+
+Code inspection identified a cold-launch/lifecycle race: native storage requires
+an active app, while the JavaScript gate could start during inactive and then
+ignore the active snapshot because its security revision was unchanged. The gate
+now waits for active, allows same-revision recovery, serializes initialization,
+and invalidates late results on background/lock/disposal. A Retry action and fixed
+startup-stage labels replace the misleading blanket device-lock explanation.
+Storage preparation, database opening, migrations, protection, key cleanup,
+inventory, and settings failures remain fail-closed and are distinguishable
+without rendering raw native errors, SQL, file paths, or credentials.
+
+New regression tests cover cold launch, unchanged-revision recovery, stale/late
+results during lock and disposal, serialized interruption recovery, and sanitized
+storage-stage failures. Confirm first launch and background/unlock recovery on
+the next candidate. The reported installed failure has no stage diagnostic, so
+the identified race is a supported cause, not proof that other device-specific
+storage failures are absent. No app data reset or weakened file protection is
+part of this fix; no build/upload was run for this correction.
+
+### iPhone status-bar safe area — 2026-10-06
+
+The navigation viewport now reserves the top/left/right safe areas for every
+route, keeping icons, headings, controls, and scrolled content below the status
+bar and away from landscape cutouts. Its background continues through the system
+bar in the app theme; status text uses dark icons for the light theme. The
+connected terminal no longer adds the same inset a second time, and its keyboard
+avoidance accounts for the viewport's top offset.
+
+All 78 JavaScript tests, lint, TypeScript, and formatting passed. Actual iPhone
+layout remains pending: inspect the Servers/Welcome icon and headings, scroll a
+long screen, rotate, and show/hide the terminal keyboard on the corrected
+candidate. No new EAS build or distribution was performed for this layout fix.
+
+### Consolidated fixes preflight — 2026-10-06
+
+After the startup, keyboard, and safe-area fixes, the consolidated workspace
+passes 78 JavaScript tests, 23 portable Swift tests, Swift syntax parsing, lint,
+TypeScript, formatting, release configuration/vendor/source scanning, and iOS
+Metro/Hermes export (1,183 modules; 2.7 MB). Native evidence is in ignored
+`native/.build/fixes-security-tests.log`; the bundle is in
+`native/.build/fixes-ios-export`. These checks include completed task 10 changes
+but do not validate StoreKit against Apple's SDK or configured products.
+
+EAS read-only status confirms build 4 remains the latest finished candidate; no
+replacement is already running. A replacement upload was blocked before execution
+by automatic approval review because explicit authorization is required to send
+the private working-tree source to EAS. No new build or upload occurred. Prior
+build 4 source/evidence files were preserved under ignored
+`.release/build4-before-fixes`. The next step requires owner authorization for
+one consolidated replacement candidate containing these fixes and task 10.
+
+### Authorized replacement build 5 — 2026-10-06
+
+The owner explicitly authorized building and publishing the consolidated version
+for tests. EAS build `efd56083-687f-4b18-84c3-c07fb5d15998` (0.1.0 build 5)
+failed Apple compilation: three type annotations in `TermforgeAccessService.swift`
+used ambiguous `Transaction` names exported by both StoreKit and SwiftUI through
+Expo. The full Xcode log reports these three compiler errors. All six transaction
+references now explicitly use `StoreKit.Transaction`. All 78 JavaScript tests and
+Swift syntax parsing still pass. Failed-build logs and its source snapshot are
+preserved under ignored `.release`; build 5 was not submitted to TestFlight.
+This diagnosed correction is included in the replacement attempt.

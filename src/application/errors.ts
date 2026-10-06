@@ -1,4 +1,5 @@
 export type AppErrorCode =
+  | 'ACCESS_REQUIRED'
   | 'INVALID_CONFIG'
   | 'DNS_FAILED'
   | 'CONNECTION_REFUSED'
@@ -26,6 +27,8 @@ export class AppError extends Error {
 }
 
 const messages: Record<AppErrorCode, string> = {
+  ACCESS_REQUIRED:
+    'Open Access to start or restore a trial or lifetime purchase. Your local data remains available.',
   INVALID_CONFIG: 'The operation settings are invalid.',
   DNS_FAILED: 'The server name could not be resolved.',
   CONNECTION_REFUSED: 'The server refused the connection.',
