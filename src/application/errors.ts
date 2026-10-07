@@ -47,10 +47,24 @@ const messages: Record<AppErrorCode, string> = {
   RESOURCE_LIMIT: 'The operation exceeds the configured resource limit.',
 };
 
+// Expo derives Swift Exception codes from their names, including the ERR_ prefix.
+const nativeCodes = Object.fromEntries(
+  (Object.keys(messages) as AppErrorCode[]).map((code) => [
+    `ERR_${code.replace(/(.)([A-Z])/g, '$1_$2').toUpperCase()}`,
+    code,
+  ]),
+) as Record<string, AppErrorCode>;
+
 export const safeError = (value: unknown): AppError => {
-  const code =
+  const rawCode =
     typeof value === 'object' && value !== null && 'code' in value ? String(value.code) : undefined;
-  return code && Object.hasOwn(messages, code)
-    ? new AppError(code as AppErrorCode, messages[code as AppErrorCode])
+  const code =
+    rawCode && Object.hasOwn(messages, rawCode)
+      ? (rawCode as AppErrorCode)
+      : rawCode && Object.hasOwn(nativeCodes, rawCode)
+        ? nativeCodes[rawCode]
+        : undefined;
+  return code
+    ? new AppError(code, messages[code])
     : new AppError('UNSUPPORTED', messages.UNSUPPORTED);
 };

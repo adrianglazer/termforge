@@ -61,8 +61,13 @@ export function createSecurityStartup(options: {
       active = next === 'active';
       if (!active) {
         ++generation;
-        publish({ kind: 'waiting' });
-        if (next === 'background') void options.suspend();
+        // Native privacy cover hides Face ID interruptions without unmounting ready routes.
+        if (next === 'background') {
+          publish({ kind: 'waiting' });
+          void options.suspend();
+        } else if (status !== 'ready') {
+          publish({ kind: 'waiting' });
+        }
       }
       // Wait for a fresh native lock snapshot before starting on foreground.
     },

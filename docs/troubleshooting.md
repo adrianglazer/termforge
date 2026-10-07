@@ -83,3 +83,51 @@ and whether this was a fresh install or an update. Do not send keys, passwords,
 or database contents. Do not delete/reinstall the app as a troubleshooting step:
 that can remove local metadata and drafts. Device verification remains pending;
 file protection and the app lock are intentionally retained.
+
+### Failure returns after creating an SSH key
+
+The saved-key startup check used a non-interactive Keychain query and discarded
+its result. If a protected item returned `KEY_LOCKED`, that failure blocked the
+entire app; Retry repeated the same query. Reinstalling removed the metadata
+references, temporarily avoiding the query until another key was created.
+
+Startup now opens protected metadata, retries pending key deletions, and applies
+auto-lock settings without requiring a key inventory read. SSH keys displays
+locked keys and keeps saved entries visible if unlinked-key discovery fails.
+When connecting, the installation-association check now shares the tracked,
+cancellable authentication context with the private-key read so that Face ID or
+passcode authentication can proceed. Keychain access controls, installation
+association, and app locking remain enforced; no reset or protection downgrade
+is performed.
+
+Regression tests reproduce the startup failure with a `KEY_LOCKED` inventory
+response and verify launch/resume, deletion recovery, and metadata failures.
+Apple compilation and device verification remain pending for the next authorized
+candidate: update the affected installation without reinstalling, launch with
+the saved key, background/unlock/reopen, then connect and verify authentication
+success and cancellation. No replacement build was requested for this fix.
+
+### Key reports locked immediately after successful authentication
+
+LocalAuthentication can complete before UIKit reports the app as active. The
+post-authentication host-trust check previously rejected that temporary inactive
+state as `KEY_LOCKED`. It now waits briefly for foreground readiness and then
+revalidates the session, lock revision and host trust. Encrypted keys also wait
+before presenting their separate passphrase prompt. Actual backgrounding or
+locking still cancels the connection. This native change requires a rebuilt iOS
+app; a JavaScript-only update cannot apply it. Device verification is pending.
+
+### Remembered trust repeatedly prompts or fails before Face ID
+
+Repeated “Trust and connect” used to update `approved_at` even for an identical
+saved key. The native challenge snapshots that approval record during inspection,
+so the app's own timestamp update invalidated the challenge before credentials
+were requested. “Connect once” avoided the update, explaining why it worked.
+
+Identical saves now preserve the complete approval record. Connect checks saved
+trust and skips the question when the target and any jump host match; remembering
+an unknown host saves only missing identities. The first-use choices are now
+“Trust and remember” and “Connect without saving.” Genuine key changes, removed
+trust and expired challenges remain blocked. Existing saved identities require
+no reset. A real SQLite regression reproduces the old timestamp mismatch and
+verifies persistence across reopening and repeat approval without record changes.

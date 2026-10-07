@@ -81,4 +81,16 @@ describe('regression boundaries', () => {
     expect(unknown.safeMessage).toBe('The operation could not be completed.');
     expect(unknown.safeMessage).not.toContain('secret');
   });
+
+  it('recognizes Expo codes from native inspection errors', () => {
+    expect(safeError({ code: 'ERR_A_CC_ES_S__RE_QU_IR_ED' })).toMatchObject({
+      code: 'ACCESS_REQUIRED',
+      safeMessage:
+        'Open Access to start or restore a trial or lifetime purchase. Your local data remains available.',
+    });
+    expect(safeError({ code: 'ERR_H_OS_T__KE_Y__UN_KN_OW_N' })).toMatchObject({
+      code: 'HOST_KEY_UNKNOWN',
+      safeMessage: 'The server identity has not been approved.',
+    });
+  });
 });

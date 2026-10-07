@@ -21,6 +21,7 @@ internal final class TermforgeCredentialPrompt {
   }
 
   func request(title: String, message: String, sessionId: String? = nil) async throws -> String {
+    try await TermforgeAppLock.shared.waitUntilActive()
     guard completion == nil,
           UIApplication.shared.applicationState == .active,
           let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }),

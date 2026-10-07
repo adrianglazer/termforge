@@ -506,7 +506,17 @@ internal final class TermforgeSessionRegistry {
     let detail = String(describing: error).lowercased()
     let code: String
     let message: String
-    if error is InvalidHostKey || detail.contains("host key") {
+    if let exception = error as? Exception,
+       ["ACCESS_REQUIRED", "KEY_LOCKED", "KEY_UNAVAILABLE", "CANCELLED", "AUTH_FAILED"].contains(exception.name) {
+      code = exception.name
+      switch code {
+      case "ACCESS_REQUIRED": message = "Open Access to restore a trial or lifetime purchase."
+      case "KEY_LOCKED": message = "The protected SSH key is locked. Unlock the device and try again."
+      case "KEY_UNAVAILABLE": message = "The protected SSH key is unavailable. Check or reassociate it in SSH Keys."
+      case "CANCELLED": message = "Authentication was cancelled. The server was not connected."
+      default: message = "The server rejected the selected credentials."
+      }
+    } else if error is InvalidHostKey || detail.contains("host key") {
       code = "HOST_KEY_CHANGED"; message = "The server identity does not match the approved host key."
     } else if detail.contains("auth") || detail.contains("password") {
       code = "AUTH_FAILED"; message = "The server rejected the selected credentials."
@@ -591,6 +601,7 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
       try await MainActor.run { try TermforgeAppLock.shared.requireUnlocked() }
       var raw = try self.loadPrivateKey(reference: reference, reason: "Authenticate to reassociate this SSH key.", requireAssociation: false)
       defer { raw.resetBytes(in: 0..<raw.count) }
+      try await TermforgeAppLock.shared.waitUntilActive()
       try await MainActor.run { try TermforgeAppLock.shared.requireUnlocked() }
       try TermforgeCredentialInventory.shared.associate(reference: reference)
     }
@@ -962,7 +973,9 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
       try TermforgeSessionRegistry.shared.connect(id: id, host: options.host, port: options.port,
         challengeId: options.challengeId, columns: options.columns, rows: options.rows,
         credentialReference: options.reference, isKey: true) {
-        var raw = try self.loadPrivateKey(reference: options.reference, reason: "Authenticate to use this SSH key.", sessionId: id)
+        var raw = try await Task.detached {
+          try self.loadPrivateKey(reference: options.reference, reason: "Authenticate to use this SSH key.", sessionId: id)
+        }.value
         defer { raw.resetBytes(in: 0..<raw.count) }
         let key: Crypto.Curve25519.Signing.PrivateKey
         if raw.count == 32 { key = try Crypto.Curve25519.Signing.PrivateKey(rawRepresentation: raw) }
@@ -1300,10 +1313,11 @@ internal final class TermforgeNativeModule: Module, @unchecked Sendable {
   }
 
   private func loadPrivateKey(reference: String, reason: String, requireAssociation: Bool = true, sessionId: String? = nil) throws -> Data {
-    if requireAssociation { try TermforgeCredentialInventory.shared.requireAssociated(reference: reference) }
     let context = LAContext()
+    context.localizedReason = reason
     TermforgeKeyAccess.shared.begin(context, sessionId: sessionId)
     defer { TermforgeKeyAccess.shared.finish(context) }
+    if requireAssociation { try TermforgeCredentialInventory.shared.requireAssociated(reference: reference, context: context) }
     let query: [String: Any] = [kSecUseAuthenticationContext as String: context, kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keyService, kSecAttrAccount as String: reference, kSecAttrSynchronizable as String: false, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne, kSecUseOperationPrompt as String: reason]
     var result: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &result)

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { safeError } from '@/application/errors';
@@ -13,6 +14,7 @@ type NativeKey = Awaited<ReturnType<typeof TermforgeNative.generateEd25519Key>>;
 
 export default function KeysScreen() {
   const theme = useTheme();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const [keys, setKeys] = useState<KeyMetadata[]>([]);
   const [orphaned, setOrphaned] = useState<string[]>([]);
   const [keyStates, setKeyStates] = useState<Record<string, string>>({});
@@ -22,25 +24,34 @@ export default function KeysScreen() {
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
     try {
+      setError(undefined);
       const db = await openMetadataDatabase();
       const stored = await new KeyRepository(db).list();
       setKeys(stored);
-      setOrphaned(await TermforgeNative.orphanedKeys(stored.map((key) => key.credentialRef)));
       setKeyStates(await TermforgeNative.credentialStates(stored.map((key) => key.credentialRef)));
+      setOrphaned([]);
+      try {
+        setOrphaned(await TermforgeNative.orphanedKeys(stored.map((key) => key.credentialRef)));
+      } catch {
+        setError('Unlinked keys could not be checked. Your saved keys are still listed below.');
+      }
     } catch {
       setError('SSH-key metadata could not be loaded.');
     }
   }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
   async function saveNativeKey(result: NativeKey, keyName: string) {
     if (!keyName.trim()) throw new Error('Give this SSH key a name.');
     const now = new Date().toISOString();
+    const id = `key-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
       const db = await openMetadataDatabase();
       await new KeyRepository(db).save({
-        id: `key-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        id,
         name: keyName,
         algorithm: result.algorithm,
         publicKey: result.publicKey,
@@ -56,6 +67,10 @@ export default function KeysScreen() {
       throw error;
     }
     setName('');
+    if (returnTo === 'server-draft') {
+      router.dismissTo({ pathname: '/servers', params: { selectedKeyId: id } });
+      return;
+    }
     await load();
   }
   async function generate() {
@@ -164,10 +179,28 @@ export default function KeysScreen() {
     <View style={[styles.page, { backgroundColor: theme.background }]}>
       <ScreenShell
         compact
-        title="SSH keys"
-        message="Private key material remains protected by the iPhone. Only an opaque reference and public metadata are stored here."
+        title={returnTo === 'server-draft' ? 'New key' : 'SSH keys'}
+        message="Private keys are protected by iOS Keychain. Public keys can be shared with your servers."
       />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          <Text accessibilityRole="header" style={[styles.name, { color: theme.text }]}>
+            Protected by your iPhone
+          </Text>
+          <Text style={{ color: theme.muted }}>
+            Private keys are stored in Apple's encrypted iOS Keychain, tied to this device, with
+            iCloud Keychain sync disabled. A device passcode is required to save a key.
+          </Text>
+          <Text style={{ color: theme.muted }}>
+            Keys created here require Face ID, Touch ID or your device passcode for protected use
+            when connecting. Canceling authentication prevents access. Viewing this screen does not
+            unlock a private key.
+          </Text>
+          <Text style={{ color: theme.muted }}>
+            Copy and export share only the public key. Termforge does not upload private keys to a
+            Termforge server. Keep your original imported keys securely for recovery.
+          </Text>
+        </View>
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
           <Field label="Key name" value={name} onChangeText={setName} />
           <View style={styles.actions}>
@@ -215,6 +248,13 @@ export default function KeysScreen() {
                 server.
               </Text>
             ) : null}
+            {keyStates[key.credentialRef] === 'locked' ? (
+              <Text style={{ color: theme.muted }}>
+                {key.protectionPolicy === 'biometry-current-set'
+                  ? 'This key requires Face ID or Touch ID when connecting. Changing enrolled biometrics can make it unavailable.'
+                  : 'This key is protected. Authenticate with Face ID, Touch ID or your device passcode when connecting.'}
+              </Text>
+            ) : null}
             {keyStates[key.credentialRef] === 'reassociate' ? (
               <View style={{ gap: 8 }}>
                 <Text style={{ color: theme.muted }}>
@@ -252,9 +292,14 @@ export default function KeysScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => {
-                void TermforgeNative.copyText(key.publicKey).catch(() =>
-                  setError('The public key could not be copied.'),
-                );
+                void TermforgeNative.copyText(key.publicKey)
+                  .then(() =>
+                    Alert.alert(
+                      'Public key copied',
+                      'The public key has been copied to the clipboard.',
+                    ),
+                  )
+                  .catch(() => setError('The public key could not be copied.'));
               }}
             >
               <Text style={{ color: theme.accent }}>Copy public key</Text>

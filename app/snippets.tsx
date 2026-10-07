@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   Alert,
   Pressable,
@@ -36,6 +36,7 @@ const newId = () => `snippet-${Date.now()}-${Math.random().toString(36).slice(2,
 
 export default function SnippetsScreen() {
   const theme = useTheme();
+  const { snippetId } = useLocalSearchParams<{ snippetId?: string }>();
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [draft, setDraft] = useState<Draft>();
   const [editing, setEditing] = useState<Snippet>();
@@ -50,9 +51,20 @@ export default function SnippetsScreen() {
       setError('Snippets could not be loaded.');
     }
   }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
   useEffect(() => {
-    void load();
-  }, [load]);
+    const selected = snippets.find((snippet) => snippet.id === snippetId);
+    if (!selected) return;
+    setDraft(undefined);
+    setPreview(selected);
+    setValues(Object.fromEntries(selected.variables.map((variable) => [variable, ''])));
+    setError(undefined);
+    router.setParams({ snippetId: undefined });
+  }, [snippetId, snippets]);
   async function save() {
     if (!draft) return;
     if (!draft.name.trim() || !draft.command.trim()) {

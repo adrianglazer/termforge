@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { validatePaneTree, validateServer } from '@/validation/domain';
 import { closePane, splitPane } from '@/workspaces/paneTree';
 import { createExport, parseImport } from '@/storage/export';
-import { emptyServerDraft, serverFromDraft } from '@/servers/model';
+import { draftFromServer, emptyServerDraft, serverFromDraft } from '@/servers/model';
 import { normalizeHost } from '@/known-hosts/repository';
 import { validateJumpGraph } from '@/servers/jumpGraph';
 import { nextTransferState } from '@/sftp/transfers';
@@ -86,6 +86,19 @@ describe('portable exports', () => {
 });
 
 describe('server profiles', () => {
+  it('does not save key authentication without a selected key', () => {
+    const draft = draftFromServer(server);
+    delete draft.keyId;
+    expect(() => serverFromDraft(draft)).toThrow('Select a saved SSH key');
+  });
+  it('honors removing or replacing an existing jump host', () => {
+    const existing = { ...server, jumpServerId: 'old' };
+    const draft = draftFromServer(existing);
+    delete draft.jumpServerId;
+    expect(serverFromDraft(draft, existing).jumpServerId).toBeUndefined();
+    expect(serverFromDraft({ ...draft, jumpServerId: 'new' }, existing).jumpServerId).toBe('new');
+  });
+
   it('creates non-secret connection metadata with safe defaults', () => {
     const profile = serverFromDraft({
       ...emptyServerDraft(),
@@ -107,6 +120,24 @@ describe('known hosts', () => {
 });
 
 describe('jump hosts', () => {
+  it('accepts supported password hops and rejects missing or key-authenticated hops', () => {
+    const jump = { ...server, id: 'jump', authMethod: 'password' as const };
+    const target = {
+      ...server,
+      id: 'target',
+      authMethod: 'password' as const,
+      jumpServerId: jump.id,
+    };
+    expect(() => validateJumpGraph([target, jump])).not.toThrow();
+    expect(() => validateJumpGraph([target])).toThrow('no longer exists');
+    expect(() => validateJumpGraph([{ ...target, authMethod: 'key' }, jump])).toThrow(
+      'password authentication',
+    );
+    expect(() => validateJumpGraph([target, { ...jump, authMethod: 'key' }])).toThrow(
+      'password authentication',
+    );
+  });
+
   it('rejects cyclic server references', () => {
     const a = { ...server, id: 'a', jumpServerId: 'b' };
     const b = { ...server, id: 'b', jumpServerId: 'a' };

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ConnectionHistoryRepository } from '@/history/repository';
 import { KeyRepository } from '@/keys/repository';
+import { checkEndpointTrust } from '@/known-hosts/trust';
 import { KnownHostRepository } from '@/known-hosts/repository';
 import { applyMigrations, migrations, type SqlExecutor } from '@/persistence/migrations';
 import { ServerRepository } from '@/servers/repository';
@@ -273,5 +274,58 @@ describe('real SQLite migrations and repositories', () => {
       expect.arrayContaining([expect.objectContaining({ name: 'public_key' })]),
     );
     sqlite.close();
+  });
+});
+
+describe('remembered server trust', () => {
+  it('survives reopening and repeated approval without invalidating a native challenge snapshot', async () => {
+    const { path, sqlite, database } = await openTemporaryDatabase();
+    const identity = {
+      algorithm: 'ssh-ed25519',
+      key: 'ssh-ed25519 cHVibGljLWZpeHR1cmU=',
+      fingerprint: 'SHA256:fixture',
+    };
+    const repository = new KnownHostRepository(database as never);
+    expect(checkEndpointTrust(await repository.list(), 'example.com', 22, identity).status).toBe(
+      'review',
+    );
+    await repository.save({
+      host: 'example.com',
+      port: 22,
+      algorithm: identity.algorithm,
+      publicKey: identity.key,
+      fingerprint: identity.fingerprint,
+      approvedAt: '2026-10-07T10:00:00Z',
+    });
+    sqlite.close();
+    const reopened = new Database(path);
+    try {
+      const saved = new KnownHostRepository(createExecutor(reopened) as never);
+      expect(checkEndpointTrust(await saved.list(), ' EXAMPLE.COM ', 22, identity).status).toBe(
+        'trusted',
+      );
+      const snapshot = () =>
+        reopened
+          .prepare(
+            'SELECT algorithm, public_key, id, approved_at FROM known_hosts WHERE host = ? AND port = ? ORDER BY algorithm, public_key',
+          )
+          .all('example.com', 22);
+      const before = snapshot();
+      await saved.save({
+        host: 'example.com',
+        port: 22,
+        algorithm: identity.algorithm,
+        publicKey: identity.key,
+        fingerprint: identity.fingerprint,
+        approvedAt: '2026-10-07T11:00:00Z',
+      });
+      expect(snapshot()).toEqual(before);
+      const awaitedHosts = await saved.list();
+      expect(() =>
+        checkEndpointTrust(awaitedHosts, 'example.com', 22, { ...identity, key: 'changed' }),
+      ).toThrow();
+    } finally {
+      reopened.close();
+    }
   });
 });

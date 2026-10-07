@@ -1,4 +1,3 @@
-import { Link } from 'expo-router';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -20,58 +19,22 @@ export function ScreenShell({
         <Image source={appIcon} style={styles.icon} accessibilityLabel="Termforge icon" />
         <View style={styles.headingText}>
           <Text style={[styles.brand, { color: theme.muted }]}>TERMFORGE</Text>
-          <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+            {title}
+          </Text>
         </View>
       </View>
-      <Text style={{ color: theme.muted }}>{message}</Text>
-      <View style={styles.nav}>
-        <Link href="/servers" style={{ color: theme.accent }}>
-          Servers
-        </Link>
-        <Link href="/terminal" style={{ color: theme.accent }}>
-          Terminal
-        </Link>
-        <Link href="/keys" style={{ color: theme.accent }}>
-          SSH keys
-        </Link>
-        <Link href="/known-hosts" style={{ color: theme.accent }}>
-          Known hosts
-        </Link>
-        <Link href="/workspaces" style={{ color: theme.accent }}>
-          Workspaces
-        </Link>
-        <Link href="/snippets" style={{ color: theme.accent }}>
-          Snippets
-        </Link>
-        <Link href="/history" style={{ color: theme.accent }}>
-          History
-        </Link>
-        <Link href="/configuration" style={{ color: theme.accent }}>
-          Import & export
-        </Link>
-        <Link href="/onboarding" style={{ color: theme.accent }}>
-          Help
-        </Link>
-        <Link href="/palette" style={{ color: theme.accent }}>
-          Palette
-        </Link>
-        <Link href="/access" style={{ color: theme.accent }}>
-          Access
-        </Link>
-        <Link href="/settings" style={{ color: theme.accent }}>
-          Settings
-        </Link>
-      </View>
+      <Text style={[styles.message, { color: theme.muted }]}>{message}</Text>
     </View>
   );
 }
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 24, gap: 14 },
+  page: { paddingTop: 16, paddingHorizontal: 24, paddingBottom: 24, gap: 14 },
   compact: { flexGrow: 0, flexShrink: 0 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  headingText: { gap: 1 },
-  icon: { width: 56, height: 56, borderRadius: 13 },
-  brand: { fontSize: 11, fontWeight: '700', letterSpacing: 1.8 },
-  title: { fontSize: 30, fontWeight: '700' },
-  nav: { flexDirection: 'row', gap: 18, marginTop: 16 },
+  headingText: { gap: 1, flex: 1 },
+  icon: { width: 56, height: 56, borderRadius: 13, flexShrink: 0 },
+  brand: { fontSize: 11, lineHeight: 14, fontWeight: '700', letterSpacing: 1.8 },
+  title: { fontSize: 30, lineHeight: 36, fontWeight: '700' },
+  message: { fontSize: 14, lineHeight: 18 },
 });

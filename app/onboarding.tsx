@@ -24,7 +24,7 @@ export default function OnboardingScreen() {
         <Step
           number="2"
           title="Protect an SSH key"
-          body="Generate or import an Ed25519 key. Private material remains in native Keychain protection; only a public fingerprint and opaque reference appear in the app."
+          body="Generate or import an Ed25519 key. Its private material is stored in iOS Keychain on this device, with iCloud Keychain sync disabled. Face ID, Touch ID or your device passcode authorizes protected use when connecting. Copy and export share only the public key."
         />
         <Step
           number="3"

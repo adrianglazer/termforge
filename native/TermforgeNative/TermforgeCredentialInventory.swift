@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import LocalAuthentication
 internal import ExpoModulesCore
 
 /// An installation marker is app-private and excluded from backup. Keys from a
@@ -32,19 +33,27 @@ internal final class TermforgeCredentialInventory: @unchecked Sendable {
     return value
   }
 
-  func state(reference: String) throws -> String {
+  func state(reference: String, context: LAContext? = nil) throws -> String {
     var result: CFTypeRef?
-    let status = SecItemCopyMatching([
+    var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service, kSecAttrAccount as String: reference,
       kSecAttrSynchronizable as String: false, kSecReturnAttributes as String: true,
       kSecMatchLimit as String: kSecMatchLimitOne,
-      kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
-    ] as CFDictionary, &result)
+    ]
+    if let context {
+      query[kSecUseAuthenticationContext as String] = context
+    } else {
+      query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+    }
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
     if status == errSecItemNotFound { return "missing" }
+    // A non-interactive inventory cannot authorize use of a protected key.
+    if status == errSecInteractionNotAllowed, context == nil { return "locked" }
     // Never interpret a locked device or an unexpected Keychain error as absence.
     guard status == errSecSuccess, let attributes = result as? [String: Any] else {
-      throw Exception(name: "KEY_LOCKED", description: "Key metadata is unavailable while the device is locked.")
+      let name = status == errSecUserCanceled || status == errSecAuthFailed ? "CANCELLED" : status == errSecInteractionNotAllowed ? "KEY_LOCKED" : "KEY_UNAVAILABLE"
+      throw Exception(name: name, description: "The protected key metadata could not be opened.")
     }
     return (attributes[kSecAttrGeneric as String] as? Data) == (try identity()) ? "available" : "reassociate"
   }
@@ -64,8 +73,8 @@ internal final class TermforgeCredentialInventory: @unchecked Sendable {
     return items.compactMap { $0[kSecAttrAccount as String] as? String }.filter { !known.contains($0) }.sorted()
   }
 
-  func requireAssociated(reference: String) throws {
-    guard try state(reference: reference) == "available" else {
+  func requireAssociated(reference: String, context: LAContext) throws {
+    guard try state(reference: reference, context: context) == "available" else {
       throw Exception(name: "KEY_UNAVAILABLE", description: "Reassociate or re-import this key before use.")
     }
   }

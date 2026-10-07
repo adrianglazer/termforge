@@ -45,6 +45,8 @@ export const draftFromServer = (server: Server): ServerDraft => ({
 });
 
 export function serverFromDraft(draft: ServerDraft, existing?: Server): Server {
+  if (draft.authMethod === 'key' && !draft.keyId)
+    throw new Error('Select a saved SSH key or add a new key before saving.');
   const now = new Date().toISOString();
   return validateServer({
     id: existing?.id ?? `server-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -55,7 +57,6 @@ export function serverFromDraft(draft: ServerDraft, existing?: Server): Server {
     authMethod: draft.authMethod,
     ...(draft.keyId ? { keyId: draft.keyId } : {}),
     ...(draft.jumpServerId ? { jumpServerId: draft.jumpServerId } : {}),
-    ...(existing?.jumpServerId ? { jumpServerId: existing.jumpServerId } : {}),
     timeoutSeconds: Number(draft.timeoutSeconds),
     keepaliveSeconds: Number(draft.keepaliveSeconds),
     reconnect: draft.reconnect,

@@ -164,10 +164,12 @@
             <h2>Credentials &amp; authentication</h2>
             <p>
               Private keys and supported stored credentials use app-scoped iOS Keychain items
-              requiring a device passcode, with device-only, nonsynchronizing accessibility.
-              Protected use requires device authentication. Password/passphrase entry and
-              private-key import occur through native prompts and file handling; ordinary app
-              metadata uses references rather than private key bytes.
+              requiring a device passcode, with device-only, nonsynchronizing accessibility. Keys
+              created or imported through the current interface require Face ID, Touch ID or the
+              device passcode for protected use. Canceling authentication prevents access. Opening
+              the app or viewing public-key metadata does not unlock a private key.
+              Password/passphrase entry and private-key import occur through native prompts and file
+              handling; ordinary app metadata uses references rather than private key bytes.
             </p>
             <p>
               Imported encrypted OpenSSH Ed25519 keys retain their encrypted representation and

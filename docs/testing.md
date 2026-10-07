@@ -255,3 +255,91 @@ references now explicitly use `StoreKit.Transaction`. All 78 JavaScript tests an
 Swift syntax parsing still pass. Failed-build logs and its source snapshot are
 preserved under ignored `.release`; build 5 was not submitted to TestFlight.
 This diagnosed correction is included in the replacement attempt.
+
+### Protected-key and navigation replacement — 2026-10-07
+
+The owner authorized a new build and TestFlight publication after the protected
+data failure recurred upon key creation. This candidate removes the unused
+non-interactive key inventory from the startup gate and shares the cancellable
+authentication context between installation-association checks and private-key
+reads. Existing Keychain access controls remain unchanged. It also contains the
+safe-area banner fix, persistent navigation Back button, server-form key refresh,
+public-key copy confirmation and user-facing key-protection explanation.
+
+All 82 JavaScript tests, lint, TypeScript, formatting, vendor/configuration checks
+and the bounded source secret scan pass. The source scan required unrestricted
+Git subprocess access after a sandbox `EPERM`; the check itself then passed.
+Expo iOS prebuild and production Metro/Hermes export pass (1,184 modules, 2.7 MB).
+Both edited native files pass Swift 6.2 syntax parsing. Unchanged portable native
+test evidence is reused; Linux cannot execute Keychain or LocalAuthentication.
+The advisory refresh and exposure assessment are recorded in
+[dependency security review](dependency-security-review.md).
+
+Before dispatch, EAS reports build 6 finished and Apple reports it `VALID` and
+`IN_BETA_TESTING`; no current-source candidate is already running. The production
+profile remains store/Release with remote build numbering, existing frozen
+credentials and the same encryption declaration. Source identity, build outcome
+and TestFlight availability will be recorded after the single replacement runs.
+Physical update/relaunch with an existing key, authentication/cancellation,
+safe-area/navigation and clipboard feedback remain pending on that candidate.
+
+## Authentication foreground transition and server navigation
+
+The connection now waits for UIKit to become active after a successful native
+credential prompt, then rechecks the app-lock revision, live session and host
+trust before sending the credential. Backgrounding, locking and cancellation
+still invalidate the attempt. Encrypted-key passphrase prompts use the same
+foreground wait. Keychain reads for connections explicitly run off the main
+actor.
+
+Validation: 87 JavaScript tests pass, including native lifecycle wiring checks;
+TypeScript, ESLint and Swift 6.2 syntax parsing of all four changed native files
+pass. Wiring checks are not an iOS runtime test. Apple compilation and the
+following device checks remain required on a rebuilt app:
+
+- Connect with generated, imported unencrypted and passphrase-encrypted keys;
+  finish Face ID or device-passcode authentication and verify a usable shell.
+- Cancel authentication, background during authentication, and lock/unlock;
+  verify no cancelled credential is sent and a fresh connection can succeed.
+- Create a server draft, enter its fields, choose Key, then select a saved key.
+  Repeat with + Add key using both generate and import; verify automatic return,
+  new-key selection and preservation of every server field. Cancel key creation
+  and verify the draft is preserved.
+- On a small iPhone and with larger text, reach every navigation button from
+  Your servers and verify matching headers and back/home navigation.
+
+## User-path audit — 2026-10-07
+
+Source-level route checks confirm that every app screen has a home-menu or
+purchase-information entry point. Reviewed paths include server creation/edit/
+duplication, key selection and create/import-return, workspaces and pane
+connections, snippets, known hosts, history, settings, import/export, purchase
+information, terminal tools, SFTP, cancellation and reconnect. This is not a
+physical-device tap-through or a guarantee of layout at every text size.
+
+Fixed during this audit:
+
+- Server edits now honor removing/replacing a jump host; duplicates preserve it.
+- Saving a key-authenticated profile requires an existing selected key. Jump
+  graphs reject missing hosts and unsupported key-authenticated hops.
+- List screens reload on focus after changes elsewhere.
+- Failed/closed connections clear consumed identity reviews and return to a
+  retryable form. The terminal is shown only when its PTY reports ready.
+- Leaving a direct terminal closes its session. Leaving a pending workspace
+  connection cancels authentication; completed workspace sessions remain in their
+  panes. Late session creation after leaving is cleaned up too.
+- Direct connection defaults use port 22 and an explicit username. SFTP starts
+  at `/`, not the development fixture's `/home/termforge` directory.
+
+Validation: 91 JavaScript tests pass and 23 portable Swift tests pass in an
+offline container, including actual loopback SSH, deferred authentication,
+bastion transport and encrypted/unencrypted Ed25519 import. These native tests do
+not execute UIKit, iOS Keychain, Face ID, the Expo bridge or a full interactive
+PTY session on the user's iPhone. The earlier device matrix still applies.
+
+Remaining audit limitation: server-specific timeout, keepalive, reconnect,
+terminal type and startup-command fields are saved but are not passed through by
+the terminal route. The native connection currently uses its built-in timeout,
+pre-authentication retries and xterm-256color defaults. A successful normal
+connection does not verify those advanced profile options. Full iPhone connection
+acceptance remains pending on a rebuilt app; no new build was dispatched here.

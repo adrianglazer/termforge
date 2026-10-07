@@ -13,7 +13,7 @@ export const decideHostTrust = (
   inspected: HostKey,
 ): HostTrustDecision => {
   if (!knownHost) return { status: 'review', inspected };
-  return knownHost.publicKey === inspected.key
+  return knownHost.algorithm === inspected.algorithm && knownHost.publicKey === inspected.key
     ? { status: 'trusted', inspected, knownHost }
     : { status: 'changed', inspected, knownHost };
 };

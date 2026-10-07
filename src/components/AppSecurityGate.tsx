@@ -1,13 +1,8 @@
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import { AppState, Pressable, Text, View } from 'react-native';
 import { TermforgeNative } from '@/native/termforgeNative';
-import {
-  openMetadataDatabase,
-  resumeMetadataStorage,
-  suspendMetadataStorage,
-} from '@/persistence/bootstrap';
-import { KeyRepository } from '@/keys/repository';
-import { SettingsRepository } from '@/settings/repository';
+import { suspendMetadataStorage } from '@/persistence/bootstrap';
+import { initializeProtectedData } from '@/security/initialize';
 import { createSecurityStartup, type StartupStatus } from '@/security/startup';
 
 /** Locked screens unmount so editor/file/terminal data does not stay in React state. */
@@ -19,22 +14,7 @@ export function AppSecurityGate({ children }: PropsWithChildren) {
       active: AppState.currentState === 'active',
       changed: setStatus,
       suspend: suspendMetadataStorage,
-      initialize: async (stage) => {
-        stage('storage');
-        await resumeMetadataStorage();
-        const database = await openMetadataDatabase();
-        const keys = new KeyRepository(database);
-        stage('key-cleanup');
-        for (const pending of await keys.pendingRemovals()) {
-          await TermforgeNative.deleteKey(pending.credentialRef);
-          await keys.remove(pending.id);
-        }
-        stage('key-inventory');
-        await TermforgeNative.credentialStates((await keys.list()).map((key) => key.credentialRef));
-        stage('settings');
-        const settings = await new SettingsRepository(database).get();
-        await TermforgeNative.setAutoLockMinutes(settings.autoLockMinutes);
-      },
+      initialize: initializeProtectedData,
     });
     const refresh = () => {
       void TermforgeNative.securityState().then(startup.apply).catch(startup.snapshotFailed);

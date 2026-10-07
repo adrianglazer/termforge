@@ -10,7 +10,7 @@ export function validateJumpGraph(servers: Server[]): void {
     let hops = 0;
     while (current.jumpServerId) {
       const next = byId.get(current.jumpServerId);
-      if (!next) break;
+      if (!next) throw new AppError('INVALID_CONFIG', 'The selected jump host no longer exists.');
       hops += 1;
       if (seen.has(next.id))
         throw new AppError('INVALID_CONFIG', 'Jump-host references cannot form a cycle.');
@@ -22,5 +22,13 @@ export function validateJumpGraph(servers: Server[]): void {
       seen.add(next.id);
       current = next;
     }
+    if (
+      server.jumpServerId &&
+      (server.authMethod !== 'password' || current.authMethod !== 'password')
+    )
+      throw new AppError(
+        'INVALID_CONFIG',
+        'Both the server and its jump host must use password authentication in this build.',
+      );
   }
 }

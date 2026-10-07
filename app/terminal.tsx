@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import {
+  ActivityIndicator,
   Alert,
-  AppState,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FileActionButton } from '@/components/FileActionButton';
+import { KeyboardToggleIcon } from '@/components/KeyboardToggleIcon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { KeyRepository } from '@/keys/repository';
 import { KnownHostRepository } from '@/known-hosts/repository';
@@ -49,8 +51,8 @@ type Form = {
 type ImportedKey = Awaited<ReturnType<typeof TermforgeNative.importEd25519Key>>;
 const initialForm: Form = {
   host: '',
-  port: '2222',
-  username: 'termforge',
+  port: '22',
+  username: '',
   useJump: false,
   jumpHost: '',
   jumpPort: '22',
@@ -77,6 +79,7 @@ export default function TerminalScreen() {
   }, []);
   const theme = useTheme();
   const safeArea = useSafeAreaInsets();
+  const navigation = useNavigation();
   const { serverId, paneId, snippet } = useLocalSearchParams<{
     serverId?: string;
     paneId?: string;
@@ -92,12 +95,39 @@ export default function TerminalScreen() {
   const [hostKey, setHostKey] = useState<HostKey>();
   const [jumpHostKey, setJumpHostKey] = useState<HostKey>();
   const [sessionId, setSessionId] = useState<string>();
+  const currentSessionId = useRef<string | undefined>(undefined);
   const [state, setState] = useState<SessionState['state']>('closed');
+  const [showTerminal, setShowTerminal] = useState(false);
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: !showTerminal, gestureEnabled: !showTerminal });
+  }, [navigation, showTerminal]);
+  const terminalShown = useRef(false);
+  const routeActive = useRef(true);
+  useEffect(() => {
+    routeActive.current = true;
+    return () => {
+      routeActive.current = false;
+      inspectionSequence.current += 1;
+      const id = currentSessionId.current;
+      currentSessionId.current = undefined;
+      // Completed workspace sessions remain reachable through their pane.
+      // Direct sessions and unfinished authentication must not outlive this route.
+      if (id && (!paneId || !terminalShown.current)) {
+        void (paneId ? sessionManager.close(id) : TermforgeNative.disconnect(id)).catch(
+          () => undefined,
+        );
+      }
+    };
+  }, [paneId]);
   const [error, setError] = useState<string>();
   const [authentication, setAuthentication] = useState<'password' | 'key'>('password');
   const [importedKey, setImportedKey] = useState<ImportedKey>();
   const [showFiles, setShowFiles] = useState(false);
-  const [remotePath, setRemotePath] = useState('/home/termforge');
+  const [remotePath, setRemotePath] = useState('/');
+  const [pathInput, setPathInput] = useState('/');
+  const directoryPath = useRef('/');
+  const directoryRequest = useRef(0);
+  const [filesLoading, setFilesLoading] = useState(false);
   const [entries, setEntries] = useState<RemoteEntry[]>([]);
   const [fileSearch, setFileSearch] = useState('');
   const [fileSort, setFileSort] = useState<'name' | 'size'>('name');
@@ -228,13 +258,41 @@ export default function TerminalScreen() {
 
   useEffect(() => {
     const subscription = TermforgeNative.addListener('onSessionState', (event) => {
-      if (sessionId && event.sessionId === sessionId) {
-        setState(event.state);
-        setError(event.state === 'failed' ? (event.message ?? 'Connection failed.') : undefined);
+      if (event.sessionId !== currentSessionId.current) return;
+      setState(event.state);
+      if (event.state === 'failed') {
+        currentSessionId.current = undefined;
+        inspectedEndpoint.current = undefined;
+        terminalShown.current = false;
+        setSessionId(undefined);
+        setShowTerminal(false);
+        setHostKey(undefined);
+        setJumpHostKey(undefined);
+        setError(event.message ?? safeError({ code: event.code }).safeMessage);
+      } else if (event.state === 'closed') {
+        const wasOpen = terminalShown.current;
+        currentSessionId.current = undefined;
+        inspectedEndpoint.current = undefined;
+        terminalShown.current = false;
+        setSessionId(undefined);
+        setShowTerminal(false);
+        setHostKey(undefined);
+        setJumpHostKey(undefined);
+        setError(
+          wasOpen
+            ? 'The connection closed. Inspect the server identity to reconnect.'
+            : 'The connection closed before the terminal opened. Inspect and try again.',
+        );
+      } else if (event.state === 'connecting' || event.state === 'ready') {
+        if (event.state === 'ready') {
+          terminalShown.current = true;
+          setShowTerminal(true);
+        }
+        setError(undefined);
       }
     });
     return () => subscription.remove();
-  }, [sessionId]);
+  }, []);
 
   useEffect(() => {
     const subscription = TermforgeNative.addListener('onTransferProgress', (event) => {
@@ -242,19 +300,6 @@ export default function TerminalScreen() {
     });
     return () => subscription.remove();
   }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    const subscription = AppState.addEventListener('change', (next) => {
-      if (next === 'background') {
-        void sessionManager.handleAppState('background');
-        if (!paneId || !profileServerId) void TermforgeNative.disconnect(sessionId);
-        setSessionId(undefined);
-        setState('closed');
-      }
-    });
-    return () => subscription.remove();
-  }, [paneId, profileServerId, sessionId]);
 
   async function inspect() {
     if (inspecting.current) return;
@@ -322,17 +367,32 @@ export default function TerminalScreen() {
     }
   }
 
-  function approve() {
+  async function approve() {
     if (!hostKey || inspectedEndpoint.current !== latestEndpoint.current) return;
-    Alert.alert(
-      'Trust this server?',
-      `${hostKey.algorithm}\n${hostKey.fingerprint}${jumpHostKey ? `\n\nJump host: ${form.jumpHost}:${form.jumpPort}\n${jumpHostKey.algorithm}\n${jumpHostKey.fingerprint}` : ''}\n\nConfirm this fingerprint with the server administrator before continuing.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Connect once', onPress: () => void connect(false) },
-        { text: 'Trust and connect', onPress: () => void connect(true) },
-      ],
-    );
+    try {
+      const known = await new KnownHostRepository(await openMetadataDatabase()).list();
+      const target = checkEndpointTrust(known, form.host, Number(form.port), hostKey);
+      const jump =
+        form.useJump && jumpHostKey
+          ? checkEndpointTrust(known, form.jumpHost, Number(form.jumpPort), jumpHostKey)
+          : undefined;
+      if (!routeActive.current || inspectedEndpoint.current !== latestEndpoint.current) return;
+      if (target.status === 'trusted' && (!form.useJump || jump?.status === 'trusted')) {
+        await connect(false);
+        return;
+      }
+      Alert.alert(
+        'Trust this server?',
+        `${hostKey.algorithm}\n${hostKey.fingerprint}${jumpHostKey ? `\n\nJump host: ${form.jumpHost}:${form.jumpPort}\n${jumpHostKey.algorithm}\n${jumpHostKey.fingerprint}` : ''}\n\nConfirm this fingerprint with the server administrator. Remember this identity to skip this question on future connections.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Connect without saving', onPress: () => void connect(false) },
+          { text: 'Trust and remember', onPress: () => void connect(true) },
+        ],
+      );
+    } catch (caught) {
+      setError(safeError(caught).safeMessage);
+    }
   }
 
   async function connect(saveTrust = false) {
@@ -356,12 +416,14 @@ export default function TerminalScreen() {
     try {
       const database = await openMetadataDatabase();
       const known = await new KnownHostRepository(database).list();
-      checkEndpointTrust(known, form.host, Number(form.port), hostKey);
-      if (form.useJump && jumpHostKey)
-        checkEndpointTrust(known, form.jumpHost, Number(form.jumpPort), jumpHostKey);
+      const targetTrust = checkEndpointTrust(known, form.host, Number(form.port), hostKey);
+      const jumpTrust =
+        form.useJump && jumpHostKey
+          ? checkEndpointTrust(known, form.jumpHost, Number(form.jumpPort), jumpHostKey)
+          : undefined;
       if (inspectedEndpoint.current !== latestEndpoint.current)
         throw new Error('Stale identity review.');
-      if (saveTrust) {
+      if (saveTrust && targetTrust.status === 'review') {
         await new KnownHostRepository(database).save({
           host: form.host,
           port: Number(form.port),
@@ -370,22 +432,30 @@ export default function TerminalScreen() {
           fingerprint: hostKey.fingerprint,
           approvedAt: new Date().toISOString(),
         });
-        if (form.useJump && jumpHostKey) {
-          await new KnownHostRepository(database).save({
-            host: form.jumpHost,
-            port: Number(form.jumpPort),
-            algorithm: jumpHostKey.algorithm,
-            publicKey: jumpHostKey.key,
-            fingerprint: jumpHostKey.fingerprint,
-            approvedAt: new Date().toISOString(),
-          });
-        }
       }
+      if (saveTrust && form.useJump && jumpHostKey && jumpTrust?.status === 'review') {
+        await new KnownHostRepository(database).save({
+          host: form.jumpHost,
+          port: Number(form.jumpPort),
+          algorithm: jumpHostKey.algorithm,
+          publicKey: jumpHostKey.key,
+          fingerprint: jumpHostKey.fingerprint,
+          approvedAt: new Date().toISOString(),
+        });
+      }
+      if (!routeActive.current) return;
       const id =
         paneId && profileServerId
           ? await sessionManager.create(paneId, profileServerId)
           : await TermforgeNative.createSession();
       createdId = id;
+      if (!routeActive.current) {
+        await (paneId ? sessionManager.close(id) : TermforgeNative.disconnect(id));
+        return;
+      }
+      currentSessionId.current = id;
+      terminalShown.current = false;
+      setShowTerminal(false);
       setSessionId(id);
       setHistoryStartedAt(startedAt);
       if (form.useJump && jumpHostKey) {
@@ -432,8 +502,16 @@ export default function TerminalScreen() {
         );
       }
     } catch (caught) {
+      if (!routeActive.current) return;
+      if (createdId && currentSessionId.current !== createdId) return;
+      currentSessionId.current = undefined;
+      terminalShown.current = false;
+      inspectedEndpoint.current = undefined;
+      setHostKey(undefined);
+      setJumpHostKey(undefined);
       if (createdId) await TermforgeNative.disconnect(createdId).catch(() => undefined);
       setSessionId(undefined);
+      setShowTerminal(false);
       setState('closed');
       if (profileServerId) {
         void saveHistory(profileServerId, startedAt, 'failed');
@@ -454,12 +532,30 @@ export default function TerminalScreen() {
     }
   }
 
-  async function refreshFiles() {
+  async function refreshFiles(path = directoryPath.current) {
     if (!sessionId) return;
+    const request = ++directoryRequest.current;
+    const isCurrent = () =>
+      request === directoryRequest.current &&
+      routeActive.current &&
+      currentSessionId.current === sessionId;
+    if (path !== directoryPath.current) {
+      setFileSearch('');
+      setRenameEntry(undefined);
+    }
+    directoryPath.current = path;
+    setRemotePath(path);
+    setPathInput(path);
+    setEntries([]);
+    setFilesLoading(true);
+    setError(undefined);
     try {
-      setEntries(await sftp.current.browse(sessionId, remotePath));
+      const next = await sftp.current.browse(sessionId, path);
+      if (isCurrent()) setEntries(next);
     } catch (caught) {
-      setError(safeError(caught).safeMessage);
+      if (isCurrent()) setError(safeError(caught).safeMessage);
+    } finally {
+      if (isCurrent()) setFilesLoading(false);
     }
   }
 
@@ -499,8 +595,7 @@ export default function TerminalScreen() {
 
   function openEntry(entry: RemoteEntry) {
     if (entry.isDirectory) {
-      setRemotePath(joinRemotePath(remotePath, entry.name));
-      setEntries([]);
+      void refreshFiles(joinRemotePath(remotePath, entry.name));
     } else {
       void download(entry.name);
     }
@@ -509,7 +604,7 @@ export default function TerminalScreen() {
   function showFileInfo(entry: RemoteEntry) {
     Alert.alert(
       entry.name,
-      `Type: ${entry.isDirectory ? 'directory' : 'file'}\nSize: ${entry.size ?? 'unknown'}\nPermissions: ${entry.permissions ?? 'unknown'}\n\nRemote changes and editor write-back require the next native SFTP capability update.`,
+      `Type: ${entry.isDirectory ? 'directory' : 'file'}\nSize: ${entry.size ?? 'unknown'}\nPermissions: ${entry.permissions ?? 'unknown'}`,
     );
   }
   async function openEditor(entry: RemoteEntry) {
@@ -609,6 +704,8 @@ export default function TerminalScreen() {
   }
 
   async function disconnect() {
+    currentSessionId.current = undefined;
+    terminalShown.current = false;
     if (sessionId) {
       if (paneId && profileServerId) await sessionManager.close(sessionId);
       else await TermforgeNative.disconnect(sessionId);
@@ -617,7 +714,26 @@ export default function TerminalScreen() {
       await saveHistory(profileServerId, historyStartedAt, 'success');
     }
     setSessionId(undefined);
+    setShowTerminal(false);
     setHostKey(undefined);
+    setState('closed');
+  }
+
+  async function cancelConnection() {
+    const id = currentSessionId.current;
+    currentSessionId.current = undefined;
+    terminalShown.current = false;
+    if (id) {
+      if (paneId && profileServerId) await sessionManager.close(id).catch(() => undefined);
+      else await TermforgeNative.disconnect(id).catch(() => undefined);
+    }
+    if (profileServerId && historyStartedAt)
+      void saveHistory(profileServerId, historyStartedAt, 'cancelled');
+    inspectedEndpoint.current = undefined;
+    setSessionId(undefined);
+    setShowTerminal(false);
+    setHostKey(undefined);
+    setJumpHostKey(undefined);
     setState('closed');
   }
 
@@ -756,9 +872,9 @@ export default function TerminalScreen() {
         {showFiles ? (
           <View style={styles.files}>
             <TextInput
-              value={remotePath}
-              onChangeText={setRemotePath}
-              onSubmitEditing={refreshFiles}
+              value={pathInput}
+              onChangeText={setPathInput}
+              onSubmitEditing={() => void refreshFiles(pathInput)}
               autoCapitalize="none"
               autoCorrect={false}
               style={styles.pathInput}
@@ -777,16 +893,12 @@ export default function TerminalScreen() {
                 onPress={() => {
                   const parent =
                     remotePath === '/' ? '/' : remotePath.replace(/\/[^/]+\/?$/, '') || '/';
-                  setRemotePath(parent);
-                  setEntries([]);
-                  void TermforgeNative.listDirectory(sessionId, parent)
-                    .then(setEntries)
-                    .catch(() => setError('Could not list the parent directory.'));
+                  void refreshFiles(parent);
                 }}
               >
                 <Text style={styles.toolActive}>Up</Text>
               </Pressable>
-              <Pressable onPress={refreshFiles}>
+              <Pressable onPress={() => void refreshFiles(pathInput)}>
                 <Text style={styles.toolActive}>Refresh</Text>
               </Pressable>
               <Pressable
@@ -848,7 +960,15 @@ export default function TerminalScreen() {
                 </Pressable>
               </View>
             ) : null}
+            {filesLoading ? (
+              <ActivityIndicator color={theme.accent} accessibilityLabel="Loading directory" />
+            ) : null}
             <ScrollView>
+              {!filesLoading && !error && filteredEntries.length === 0 ? (
+                <Text style={styles.fileMeta}>
+                  {fileSearch ? 'No matching files.' : 'This directory is empty.'}
+                </Text>
+              ) : null}
               {filteredEntries.map((entry) => (
                 <View key={entry.name} style={styles.fileRow}>
                   <Pressable onPress={() => openEntry(entry)} style={styles.fileMain}>
@@ -861,26 +981,33 @@ export default function TerminalScreen() {
                       {entry.permissions ?? '—'}
                     </Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" onPress={() => showFileInfo(entry)}>
-                    <Text style={styles.toolActive}>Info</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => {
-                      setRenameEntry(entry);
-                      setRenameValue(entry.name);
-                    }}
-                  >
-                    <Text style={styles.toolActive}>Rename</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" onPress={() => removeRemote(entry)}>
-                    <Text style={styles.disconnect}>Delete</Text>
-                  </Pressable>
-                  {!entry.isDirectory ? (
-                    <Pressable accessibilityRole="button" onPress={() => void openEditor(entry)}>
-                      <Text style={styles.toolActive}>Edit</Text>
-                    </Pressable>
-                  ) : null}
+                  <View style={styles.entryActions}>
+                    <FileActionButton
+                      action="info"
+                      name={entry.name}
+                      onPress={() => showFileInfo(entry)}
+                    />
+                    <FileActionButton
+                      action="rename"
+                      name={entry.name}
+                      onPress={() => {
+                        setRenameEntry(entry);
+                        setRenameValue(entry.name);
+                      }}
+                    />
+                    <FileActionButton
+                      action="delete"
+                      name={entry.name}
+                      onPress={() => removeRemote(entry)}
+                    />
+                    {!entry.isDirectory ? (
+                      <FileActionButton
+                        action="edit"
+                        name={entry.name}
+                        onPress={() => void openEditor(entry)}
+                      />
+                    ) : null}
+                  </View>
                 </View>
               ))}
             </ScrollView>
@@ -1024,9 +1151,7 @@ export default function TerminalScreen() {
                   );
                 }}
               >
-                <Text style={styles.keyText}>
-                  {keyboardVisible ? 'Hide keyboard' : 'Show keyboard'}
-                </Text>
+                <KeyboardToggleIcon visible={keyboardVisible} />
               </Pressable>
               <ScrollView
                 horizontal
@@ -1216,6 +1341,29 @@ export default function TerminalScreen() {
             ) : null}
           </View>
         ) : null}
+        {!showTerminal ? (
+          <View
+            style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]}
+            accessibilityViewIsModal
+          >
+            <ScreenShell
+              title="Connecting"
+              message="Complete the authentication prompt to open your terminal."
+              compact
+            />
+            <View style={{ padding: 24, gap: 20 }}>
+              <ActivityIndicator color={theme.accent} />
+              <Text style={{ color: theme.muted, textAlign: 'center' }}>
+                {state === 'reconnecting'
+                  ? 'Retrying the connection…'
+                  : 'Waiting for SSH authentication…'}
+              </Text>
+              <Pressable accessibilityRole="button" onPress={() => void cancelConnection()}>
+                <Text style={{ color: theme.accent, textAlign: 'center' }}>Cancel connection</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     );
   }
@@ -1331,8 +1479,8 @@ export default function TerminalScreen() {
                 {hostKey.fingerprint}
               </Text>
               <Action
-                label="Review and connect"
-                onPress={approve}
+                label="Connect"
+                onPress={() => void approve()}
                 disabled={
                   !form.username ||
                   (form.useJump
@@ -1421,7 +1569,7 @@ const styles = StyleSheet.create({
   terminal: { flex: 1 },
   statusSafeArea: { backgroundColor: '#000' },
   statusBar: {
-    minHeight: 30,
+    minHeight: 44,
     paddingHorizontal: 8,
     paddingVertical: 4,
     backgroundColor: '#374151',
@@ -1430,7 +1578,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  statusText: { color: '#e5e7eb', fontSize: 12, flexShrink: 1 },
+  statusText: { color: '#e5e7eb', fontSize: 12, flexShrink: 1, minWidth: 0 },
   sessionTools: {
     flexDirection: 'row',
     gap: 12,
@@ -1497,23 +1645,29 @@ const styles = StyleSheet.create({
   fileActions: { flexDirection: 'row', gap: 20 },
   fileRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
     paddingVertical: 12,
     borderBottomColor: '#1f2937',
     borderBottomWidth: 1,
   },
-  fileMain: { flex: 1, gap: 3 },
+  fileMain: { flexGrow: 1, flexBasis: 140, minWidth: 0, gap: 3 },
+  entryActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   fileName: { color: '#f9fafb', flex: 1 },
   fileMeta: { color: '#9ca3af' },
   keyboardToolbar: { flexDirection: 'row', alignItems: 'stretch', backgroundColor: '#111827' },
   keyboardToggle: {
+    width: 44,
+    flexShrink: 0,
+    alignItems: 'center',
     minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: 10,
     borderRightWidth: 1,
     borderRightColor: '#4b5563',
   },
-  keyBar: { flex: 1, backgroundColor: '#111827' },
+  keyBar: { flex: 1, minWidth: 0, backgroundColor: '#111827' },
   keyBarContent: { gap: 6, paddingHorizontal: 8, paddingVertical: 6 },
   keyButton: {
     borderColor: '#4b5563',

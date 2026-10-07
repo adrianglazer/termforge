@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/components/ScreenShell';
@@ -19,9 +20,11 @@ export default function KnownHostsScreen() {
       setError('Known hosts could not be loaded.');
     }
   }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
   function remove(host: KnownHost) {
     Alert.alert(
       'Remove trusted host?',
@@ -57,7 +60,7 @@ export default function KnownHostsScreen() {
       <ScrollView contentContainerStyle={styles.list}>
         {hosts.length === 0 ? (
           <Text style={{ color: theme.muted }}>
-            No hosts have been saved yet. Choose “Trust and connect” after reviewing a server
+            No hosts have been saved yet. Choose “Trust and remember” after reviewing a server
             fingerprint.
           </Text>
         ) : null}

@@ -277,14 +277,19 @@
               </p>
               <ul>
                 <li>
-                  Private keys use iOS Keychain; supported protected use requires device
-                  authentication.
+                  Private SSH keys use Apple's encrypted iOS Keychain with device-only protection
+                  and iCloud Keychain sync disabled. Saving a key requires a device passcode.
+                </li>
+                <li>
+                  Keys created in the app require Face ID, Touch ID or your device passcode for
+                  protected use when connecting. Copy and export share only the public key.
                 </li>
                 <li>
                   Password and Ed25519 authentication are supported. RSA/ECDSA private keys and
                   keyboard-interactive/MFA are unavailable.
                 </li>
               </ul>
+              <a class="text-link" href="privacy#credentials">How your keys are protected →</a>
               <p class="small">
                 The source also implements local/remote TCP forwarding and one
                 password-authenticated bastion hop. Portable integration tests pass; signed-iPhone

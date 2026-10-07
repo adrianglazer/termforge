@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { ScreenShell } from '@/components/ScreenShell';
 import { NativeTerminalView } from '@/native/termforgeNative';
@@ -27,6 +27,7 @@ const makeId = (kind: string) => `${kind}-${Date.now()}-${Math.random().toString
 
 export default function WorkspacesScreen() {
   const theme = useTheme();
+  const { workspaceId } = useLocalSearchParams<{ workspaceId?: string }>();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [servers, setServers] = useState<Server[]>([]);
   const [active, setActive] = useState<Workspace>();
@@ -48,10 +49,19 @@ export default function WorkspacesScreen() {
       setError('Workspaces could not be loaded.');
     }
   }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
   useEffect(() => sessionManager.subscribe(setLiveSessions), []);
+  useEffect(() => {
+    const selected = workspaces.find((workspace) => workspace.id === workspaceId);
+    if (!selected) return;
+    setActive(selected);
+    router.setParams({ workspaceId: undefined });
+  }, [workspaceId, workspaces]);
+
   async function persist(workspace: Workspace) {
     try {
       const db = await openMetadataDatabase();

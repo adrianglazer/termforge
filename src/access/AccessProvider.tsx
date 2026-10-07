@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'expo-router';
+import { Link, usePathname } from 'expo-router';
 import { Text, View } from 'react-native';
 import { TermforgeNative } from '@/native/termforgeNative';
 import { accessStatus, initialAccess, reconcileAccess, type AccessSnapshot } from '@/domain/access';
@@ -14,6 +14,7 @@ export const useAccess = () => useContext(AccessContext);
 export function AccessProvider({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState(initialAccess);
   const theme = useTheme();
+  const pathname = usePathname();
   const accept = (next: AccessSnapshot) => setAccess((old) => reconcileAccess(old, next));
   const failed = () => setAccess((old) => ({ ...old, busy: false, outcome: 'bridgeUnavailable' }));
   useEffect(() => {
@@ -36,7 +37,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
   return (
     <AccessContext.Provider value={{ access, act }}>
       <View style={{ flex: 1 }}>
-        {access.state !== 'lifetime' ? (
+        {access.state !== 'lifetime' && (pathname === '/servers' || pathname === '/') ? (
           <View style={{ padding: 12, gap: 4, backgroundColor: theme.surface }}>
             <Text
               accessibilityLiveRegion="polite"

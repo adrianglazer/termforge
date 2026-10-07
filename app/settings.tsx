@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TermforgeNative } from '@/native/termforgeNative';
@@ -22,9 +23,11 @@ export default function SettingsScreen() {
       setError('Settings could not be loaded.');
     }
   }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
   async function update(next: Settings) {
     try {
       const db = await openMetadataDatabase();

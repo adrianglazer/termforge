@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { HomeActions, HomeTools, HelpFooter } from '@/components/HomeNavigation';
 import { ScreenShell } from '@/components/ScreenShell';
 import { KeyRepository } from '@/keys/repository';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
@@ -23,6 +24,8 @@ import type { AuthMethod, KeyMetadata, Server } from '@/types/domain';
 
 export default function ServersScreen() {
   const theme = useTheme();
+  const { selectedKeyId } = useLocalSearchParams<{ selectedKeyId?: string }>();
+  const [choosingKey, setChoosingKey] = useState(false);
   const [servers, setServers] = useState<Server[]>([]);
   const [keys, setKeys] = useState<KeyMetadata[]>([]);
   const [draft, setDraft] = useState<ServerDraft>();
@@ -42,13 +45,29 @@ export default function ServersScreen() {
       setLoading(false);
     }
   }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
   useEffect(() => sessionManager.subscribe(setLiveSessions), []);
+  useEffect(() => {
+    if (!selectedKeyId) return;
+    setDraft((current) =>
+      current ? { ...current, authMethod: 'key', keyId: selectedKeyId } : current,
+    );
+    setChoosingKey(false);
+    router.setParams({ selectedKeyId: undefined });
+  }, [selectedKeyId]);
   function startCreate() {
+    setChoosingKey(false);
     setEditing(undefined);
     setDraft(emptyServerDraft());
+    setError(undefined);
+  }
+  function closeDraft() {
+    setDraft(undefined);
+    setEditing(undefined);
     setError(undefined);
   }
   function startEdit(server: Server) {
@@ -78,6 +97,7 @@ export default function ServersScreen() {
       username: server.username,
       authMethod: server.authMethod,
       ...(server.keyId ? { keyId: server.keyId } : {}),
+      ...(server.jumpServerId ? { jumpServerId: server.jumpServerId } : {}),
       timeoutSeconds: String(server.timeoutSeconds),
       keepaliveSeconds: String(server.keepaliveSeconds),
       reconnect: server.reconnect,
@@ -91,6 +111,8 @@ export default function ServersScreen() {
     try {
       const db = await openMetadataDatabase();
       const next = serverFromDraft(draft, editing);
+      if (next.authMethod === 'key' && !(await new KeyRepository(db).get(next.keyId!)))
+        throw new Error('The selected SSH key no longer exists. Select or add another key.');
       validateJumpGraph([...servers.filter((server) => server.id !== next.id), next]);
       await new ServerRepository(db).save(next);
       setDraft(undefined);
@@ -128,6 +150,9 @@ export default function ServersScreen() {
         style={[styles.page, { backgroundColor: theme.background }]}
         contentContainerStyle={styles.content}
       >
+        <Pressable accessibilityRole="button" onPress={closeDraft} style={styles.backButton}>
+          <Text style={{ color: theme.accent }}>‹ Back to your servers</Text>
+        </Pressable>
         <ScreenShell
           title={editing ? 'Edit server' : 'New server'}
           message="Connection details are stored locally. Passwords are requested only when you connect."
@@ -174,22 +199,49 @@ export default function ServersScreen() {
           {draft.authMethod === 'key' ? (
             <View style={styles.field}>
               <Text style={[styles.label, { color: theme.muted }]}>SSH key</Text>
-              {keys.length === 0 ? (
-                <Text style={{ color: theme.muted }}>
-                  Create or import a key from the SSH keys screen first.
-                </Text>
-              ) : (
-                <View style={styles.choiceRow}>
-                  {keys.map((key) => (
-                    <KeyChoice
-                      key={key.id}
-                      name={key.name}
-                      selected={key.id === draft.keyId}
-                      onPress={() => setDraft({ ...draft, keyId: key.id })}
-                    />
-                  ))}
-                </View>
-              )}
+              <View style={styles.choiceRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setChoosingKey(!choosingKey)}
+                  accessibilityState={{ expanded: choosingKey }}
+                  style={[styles.choice, { borderColor: theme.accent }]}
+                >
+                  <Text style={{ color: theme.accent }}>
+                    {keys.find((key) => key.id === draft.keyId)?.name ?? 'Select saved key'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Add SSH key"
+                  onPress={() =>
+                    router.push({ pathname: '/keys', params: { returnTo: 'server-draft' } })
+                  }
+                  style={[styles.choice, { borderColor: theme.accent }]}
+                >
+                  <Text style={{ color: theme.accent }}>+ Add key</Text>
+                </Pressable>
+              </View>
+              {choosingKey ? (
+                keys.length === 0 ? (
+                  <Text style={{ color: theme.muted }}>
+                    No saved keys yet. Tap + Add key to generate or import one.
+                  </Text>
+                ) : (
+                  <View style={styles.choiceRow}>
+                    {keys.map((key) => (
+                      <KeyChoice
+                        key={key.id}
+                        name={key.name}
+                        selected={key.id === draft.keyId}
+                        onPress={() => {
+                          setDraft({ ...draft, keyId: key.id });
+                          setChoosingKey(false);
+                        }}
+                      />
+                    ))}
+                  </View>
+                )
+              ) : null}
             </View>
           ) : null}
           <View style={styles.field}>
@@ -279,11 +331,7 @@ export default function ServersScreen() {
           >
             <Text style={styles.primaryText}>Save server</Text>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.cancel}
-            onPress={() => setDraft(undefined)}
-          >
+          <Pressable accessibilityRole="button" style={styles.cancel} onPress={closeDraft}>
             <Text style={{ color: theme.muted }}>Cancel</Text>
           </Pressable>
         </View>
@@ -291,74 +339,69 @@ export default function ServersScreen() {
     );
   return (
     <View style={[styles.page, { backgroundColor: theme.background }]}>
-      <ScreenShell
-        title="Servers"
-        message="Manage connection profiles. Server identities are verified before authentication."
-        compact
-      />
-      <View style={styles.listHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Saved servers</Text>
-        <Pressable
-          accessibilityRole="button"
-          style={[styles.newButton, { borderColor: theme.accent }]}
-          onPress={startCreate}
-        >
-          <Text style={{ color: theme.accent }}>Add server</Text>
-        </Pressable>
-      </View>
-      {loading ? <ActivityIndicator color={theme.accent} /> : null}
-      {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.list}>
-        {!loading && servers.length === 0 ? (
-          <Text style={{ color: theme.muted }}>
-            No servers yet. Add one to start a trusted SSH connection.
-          </Text>
-        ) : null}
-        {servers.map((server) => (
-          <View key={server.id} style={[styles.serverCard, { backgroundColor: theme.surface }]}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Connect to ${server.name}`}
-              style={styles.serverMain}
-              onPress={() =>
-                router.push({ pathname: '/terminal', params: { serverId: server.id } })
-              }
-            >
-              <Text style={[styles.serverName, { color: theme.text }]}>{server.name}</Text>
-              <Text style={{ color: theme.muted }}>
-                {server.username}@{server.host}:{server.port}
-              </Text>
-              <Text style={{ color: theme.muted }}>
-                {server.authMethod} · {server.terminalType}
-              </Text>
-              <Text style={{ color: theme.muted }}>
-                Saved profile ·{' '}
-                {liveSessions.some((session) => session.serverId === server.id)
-                  ? 'active pane session'
-                  : 'disconnected'}
-              </Text>
-              {liveSessions
-                .filter((session) => session.serverId === server.id)
-                .map((session) => (
-                  <Text key={session.sessionId} style={{ color: theme.accent }}>
-                    Pane session · {session.state}
-                  </Text>
-                ))}
-            </Pressable>
-            <View style={styles.serverActions}>
-              <Pressable accessibilityRole="button" onPress={() => startEdit(server)}>
-                <Text style={{ color: theme.accent }}>Edit</Text>
+      <ScrollView>
+        <ScreenShell
+          title="Your servers"
+          message="Manage connection profiles. Server identities are verified before authentication."
+          compact
+        />
+        <HomeActions onAddServer={startCreate} />
+        {loading ? <ActivityIndicator color={theme.accent} /> : null}
+        {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+        <View style={styles.list}>
+          {!loading && servers.length === 0 ? (
+            <Text style={{ color: theme.muted }}>
+              No servers yet. Add one to start a trusted SSH connection.
+            </Text>
+          ) : null}
+          {servers.map((server) => (
+            <View key={server.id} style={[styles.serverCard, { backgroundColor: theme.surface }]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Connect to ${server.name}`}
+                style={styles.serverMain}
+                onPress={() =>
+                  router.push({ pathname: '/terminal', params: { serverId: server.id } })
+                }
+              >
+                <Text style={[styles.serverName, { color: theme.text }]}>{server.name}</Text>
+                <Text style={{ color: theme.muted }}>
+                  {server.username}@{server.host}:{server.port}
+                </Text>
+                <Text style={{ color: theme.muted }}>
+                  {server.authMethod} · {server.terminalType}
+                </Text>
+                <Text style={{ color: theme.muted }}>
+                  Saved profile ·{' '}
+                  {liveSessions.some((session) => session.serverId === server.id)
+                    ? 'active pane session'
+                    : 'disconnected'}
+                </Text>
+                {liveSessions
+                  .filter((session) => session.serverId === server.id)
+                  .map((session) => (
+                    <Text key={session.sessionId} style={{ color: theme.accent }}>
+                      Pane session · {session.state}
+                    </Text>
+                  ))}
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => startDuplicate(server)}>
-                <Text style={{ color: theme.accent }}>Duplicate</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => confirmDelete(server)}>
-                <Text style={{ color: theme.danger }}>Delete</Text>
-              </Pressable>
+              <View style={styles.serverActions}>
+                <Pressable accessibilityRole="button" onPress={() => startEdit(server)}>
+                  <Text style={{ color: theme.accent }}>Edit</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => startDuplicate(server)}>
+                  <Text style={{ color: theme.accent }}>Duplicate</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => confirmDelete(server)}>
+                  <Text style={{ color: theme.danger }}>Delete</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        ))}
+          ))}
+        </View>
+        <HomeTools />
       </ScrollView>
+      <HelpFooter />
     </View>
   );
 }
@@ -421,15 +464,13 @@ function KeyChoice({
 const styles = StyleSheet.create({
   page: { flex: 1 },
   content: { paddingBottom: 32 },
-  listHeader: {
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  backButton: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+    marginHorizontal: 24,
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700' },
-  newButton: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 },
   list: { padding: 24, paddingTop: 4, gap: 12 },
   serverCard: { padding: 14, borderRadius: 12, gap: 12 },
   serverMain: { gap: 3 },
@@ -440,7 +481,14 @@ const styles = StyleSheet.create({
   label: { fontSize: 13 },
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  choice: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  choice: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',

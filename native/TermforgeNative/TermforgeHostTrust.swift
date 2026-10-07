@@ -113,6 +113,7 @@ internal final class TermforgeTrustLease: NIOSSHClientServerAuthenticationDelega
   }
 
   func checkCurrent() async throws {
+    try await TermforgeAppLock.shared.waitUntilActive()
     try await MainActor.run {
       try TermforgeAppLock.shared.requireUnlocked()
       try TermforgeAccessService.shared.requireRemoteAccess()

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { router } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ScreenShell } from '@/components/ScreenShell';
@@ -24,12 +24,14 @@ export default function PaletteScreen() {
       setSnippets(await new SnippetRepository(database).list());
       setWorkspaces(await new WorkspaceRepository(database).list());
     } catch {
-      setError('The command palette could not be loaded.');
+      setError('Search could not be loaded.');
     }
   }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
   const matches = useMemo(() => query.trim().toLowerCase(), [query]);
   const matching = <T extends { name: string }>(items: T[]) =>
     items.filter((item) => !matches || item.name.toLowerCase().includes(matches));
@@ -37,11 +39,13 @@ export default function PaletteScreen() {
     <View style={[styles.page, { backgroundColor: theme.background }]}>
       <ScreenShell
         compact
-        title="Command palette"
-        message="Navigation and snippets are explicit. A snippet is never executed simply by appearing here."
+        title="Search"
+        message="Find your servers, workspaces and saved snippets."
       />
       <TextInput
         autoFocus
+        accessibilityLabel="Search servers, workspaces and snippets"
+        returnKeyType="search"
         value={query}
         onChangeText={setQuery}
         placeholder="Search servers, workspaces, snippets"
@@ -72,7 +76,12 @@ export default function PaletteScreen() {
           items={matching(workspaces)}
           empty="No matching workspaces."
           render={(workspace) => (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/workspaces')}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                router.push({ pathname: '/workspaces', params: { workspaceId: workspace.id } })
+              }
+            >
               <Text style={{ color: theme.accent }}>{workspace.name}</Text>
             </Pressable>
           )}
@@ -82,7 +91,12 @@ export default function PaletteScreen() {
           items={matching(snippets)}
           empty="No matching snippets."
           render={(snippet) => (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/snippets')}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                router.push({ pathname: '/snippets', params: { snippetId: snippet.id } })
+              }
+            >
               <Text style={{ color: theme.accent }}>
                 {snippet.favorite ? '★ ' : ''}
                 {snippet.name} · {snippet.category}

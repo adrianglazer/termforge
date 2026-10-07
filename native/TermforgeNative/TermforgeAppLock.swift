@@ -67,6 +67,25 @@ internal final class TermforgeAppLock: NSObject {
     }
   }
 
+  /// LocalAuthentication can return before UIKit finishes becoming active.
+  /// Wait for that transition without authorizing work after a real lock/background.
+  func waitUntilActive() async throws {
+    let expectedRevision = revision
+    let deadline = ProcessInfo.processInfo.systemUptime + 10
+    while true {
+      try Task.checkCancellation()
+      guard !locked, revision == expectedRevision,
+            UIApplication.shared.applicationState != .background else {
+        throw CancellationError()
+      }
+      if UIApplication.shared.applicationState == .active { return }
+      guard ProcessInfo.processInfo.systemUptime < deadline else {
+        throw Exception(name: "KEY_LOCKED", description: "Return to Termforge and try connecting again.")
+      }
+      try await Task<Never, Never>.sleep(for: .milliseconds(50))
+    }
+  }
+
   func lock() {
     unlockContext?.invalidate(); unlockContext = nil
     pendingUnlockPublication = false

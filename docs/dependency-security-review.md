@@ -75,3 +75,26 @@ the full Xcode log contains no `_CryptoExtras` target/object mention and the IPA
 includes the generated notice resource. See task 08 for the exact artifact.
 Physical behavior and final owner distribution/notice review remain pending. Retained BoringSSL source copyright/license headers are included
 in generated acknowledgements in addition to existing native/npm/CocoaPods notices.
+
+## Replacement-candidate advisory refresh — 2026-10-07
+
+The full `npm audit --json` (including development dependencies, unlike the older
+production-only report) reports 29 affected entries: 2 critical, 15 high and
+12 moderate. No dependency versions changed for this candidate. The report is
+retained in ignored `.release/preflight-npm-audit.json`; this is not a clean audit.
+
+- [shell-quote GHSA-pqg4-j6r4-53mv](https://github.com/advisories/GHSA-pqg4-j6r4-53mv):
+  installed 1.10.0 through React Native's `react-devtools-core`. The affected
+  `quote()` path requires attacker-controlled newline tokens after a comment
+  token. React Native loads these DevTools under `__DEV__`; the production
+  Release profile disables development mode. App SSH commands use the native
+  SSH transport, not this Node shell-quoting package. Retain as development-tool
+  maintenance; do not expose DevTools to untrusted clients.
+- [Vitest GHSA-5xrq-8626-4rwp](https://github.com/advisories/GHSA-5xrq-8626-4rwp)
+  and [mocker GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9):
+  installed 4.0.16 in development dependencies. Release validation uses
+  `vitest run` with the Node environment, with no UI/API server, browser mode or
+  standalone mocker plugin. These packages are not app runtime imports.
+  Updating the test tools remains a maintenance follow-up; do not expose their
+  development servers. These reports do not block this internal TestFlight
+  candidate under the inspected configuration.

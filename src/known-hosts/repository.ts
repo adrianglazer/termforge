@@ -45,12 +45,14 @@ export class KnownHostRepository {
   }
 
   async save(host: Omit<KnownHost, 'id'>): Promise<void> {
+    // Native challenges include the original approval record. Reapproving the
+    // same key must not invalidate an in-flight connection by changing its date.
     const result = await this.database.runAsync(
       `INSERT INTO known_hosts (id, host, port, algorithm, public_key, fingerprint, approved_at)
        SELECT ?, ?, ?, ?, ?, ?, ?
        WHERE NOT EXISTS (SELECT 1 FROM known_hosts WHERE host = ? AND port = ?
          AND (algorithm != ? OR public_key != ?))
-       ON CONFLICT(host, port, algorithm) DO UPDATE SET approved_at = excluded.approved_at
+       ON CONFLICT(host, port, algorithm) DO UPDATE SET approved_at = known_hosts.approved_at
        WHERE known_hosts.public_key = excluded.public_key`,
       `host-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       normalizeHost(host.host),

@@ -41,6 +41,26 @@ describe('protected startup lifecycle', () => {
     expect(JSON.stringify(f.changed.mock.calls)).not.toContain('secret');
   });
 
+  it('keeps the current screen mounted during a temporary authentication prompt', async () => {
+    const f = fixture();
+    f.startup.apply(unlocked);
+    await vi.waitFor(() => expect(f.changed).toHaveBeenLastCalledWith({ kind: 'ready' }));
+    const updates = f.changed.mock.calls.length;
+
+    f.startup.activity('inactive');
+    expect(f.changed).toHaveBeenCalledTimes(updates);
+    expect(f.suspend).not.toHaveBeenCalled();
+
+    f.startup.activity('active');
+    f.startup.apply(unlocked);
+    expect(f.initialize).toHaveBeenCalledTimes(1);
+
+    f.startup.activity('inactive');
+    f.startup.apply({ locked: true, revision: 1 });
+    expect(f.changed).toHaveBeenLastCalledWith({ kind: 'waiting' });
+    expect(f.suspend).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores stale snapshots and prevents late startup from unlocking a locked screen', async () => {
     const f = fixture();
     let finish!: () => void;
