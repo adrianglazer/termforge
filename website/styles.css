@@ -231,6 +231,26 @@ code {
   letter-spacing: 0.08em;
   color: var(--muted);
 }
+.product-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.hero-shot {
+  width: min(100%, 300px);
+  margin-inline: auto;
+}
+.demo-video {
+  display: block;
+  width: min(100%, 360px);
+  height: auto;
+  margin-inline: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #101213;
+}
 .phone {
   width: min(100%, 260px);
   aspect-ratio: 9 / 17;

@@ -3,18 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Privacy Policy (draft) — Termforge</title>
+    <title>Privacy Policy — Termforge</title>
     <meta
       name="description"
-      content="Draft privacy policy covering Termforge local app data, Keychain credentials, SSH/SFTP connections, file exports, diagnostics, and website hosting."
+      content="Termforge privacy policy: local app data, SSH/SFTP connections, Apple purchases, voluntary email support, and website requests."
     />
     <meta name="theme-color" content="#101213" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Termforge" />
-    <meta property="og:title" content="Privacy Policy (draft) — Termforge" />
+    <meta property="og:title" content="Privacy Policy — Termforge" />
     <meta
       property="og:description"
-      content="Draft privacy policy covering Termforge local app data, Keychain credentials, SSH/SFTP connections, file exports, diagnostics, and website hosting."
+      content="Termforge privacy policy: local app data, SSH/SFTP connections, Apple purchases, voluntary email support, and website requests."
     />
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary" />
@@ -36,30 +36,25 @@
           <a href="./#faq">FAQ</a>
           <a href="support">Support</a>
           <!-- APP_STORE_URL: replace with the verified listing URL. -->
-          <a class="store-link" href="./#availability">App Store · pending</a>
+          <a class="store-link" href="./#availability">App Store · in review</a>
         </nav>
       </div>
     </header>
     <main id="main" tabindex="-1" class="container">
       <div class="page-intro">
-        <p class="eyebrow">Termforge / Privacy</p>
-        <h1>Your data.<br />Your destinations.</h1>
+        <p class="eyebrow">Termforge / Privacy Policy</p>
+        <h1>Privacy Policy</h1>
         <p class="lead">
-          Termforge connects your iPhone to servers you choose. Local app storage, remote-server
-          activity, and visits to this website have different data flows.
+          Your app data stays on your device and goes to the destinations you choose.
         </p>
         <div class="notice">
           <p>
-            <strong>Draft pending owner review.</strong> This policy describes inspected source and
-            release documentation. Current-candidate physical privacy checks remain pending.
-            Operator, hosting, correspondence practices, and effective date must be confirmed before
-            publication.
-          </p>
-          <p>
-            <strong>Effective date:</strong> <span class="pending">[OWNER INPUT]</span><br /><strong
-              >Operator and privacy contact:</strong
-            >
-            <span class="pending">[OWNER INPUT: legal name, address, privacy email]</span>
+            <strong>Operator:</strong> Adrian Krzysztof Glazer<br />
+            <strong>VAT ID:</strong> ESZ3681468R · <strong>Reg. no:</strong> Z3681468R<br />
+            Calle Canarias, 6-6-43<br />03130 Santa Pola<br />Alicante<br />Spain<br />
+            <strong>Email:</strong>
+            <a href="mailto:adrian.glazer@gmail.com">adrian.glazer@gmail.com</a><br />
+            <strong>Effective date:</strong> 8 October 2026
           </p>
         </div>
       </div>
@@ -67,274 +62,195 @@
         <aside class="contents">
           <h2>On this page</h2>
           <nav aria-label="On this page">
-            <a href="#scope">Scope &amp; operator</a><a href="#local-data">Local app data</a
-            ><a href="#credentials">Credentials &amp; authentication</a
-            ><a href="#purchases">Purchases &amp; access</a
-            ><a href="#remote-servers">Your remote servers</a
-            ><a href="#files-exports">Imports, exports &amp; clipboard</a
-            ><a href="#diagnostics">Diagnostics &amp; support</a
-            ><a href="#retention">Retention, deletion &amp; recovery</a
-            ><a href="#third-parties">Components &amp; third parties</a
-            ><a href="#website">Website, hosting &amp; cookies</a
-            ><a href="#updates">Policy updates &amp; contact</a>
+            <a href="#scope">Scope &amp; data collection</a>
+            <a href="#local-data">Local app data</a>
+            <a href="#credentials">Credentials &amp; authentication</a>
+            <a href="#remote-servers">Your remote servers</a>
+            <a href="#files-exports">Files, exports &amp; clipboard</a>
+            <a href="#purchases">Apple purchases &amp; diagnostics</a>
+            <a href="#diagnostics">Email support</a>
+            <a href="#website">Website &amp; hosting</a>
+            <a href="#retention">Deletion &amp; your rights</a>
+            <a href="#updates">Updates &amp; contact</a>
           </nav>
         </aside>
         <div class="prose">
           <section id="scope">
-            <h2>Scope &amp; operator</h2>
+            <h2>Scope &amp; data collection</h2>
             <p>
-              This draft covers the Termforge iPhone app and this static support website. The app is
-              an SSH/SFTP client, not a hosted server service. No Termforge account, proprietary
-              backend, telemetry service, analytics integration, or cloud sync is configured in the
-              reviewed source.
+              This policy covers the Termforge iPhone app and its website. The operator above is
+              responsible for personal information received through support and website operation.
             </p>
             <p>
-              The operator's identity and contact details are pending. This is not a filed App Store
-              privacy label or a blanket claim that no information leaves your phone. Commands,
-              files, and authentication intentionally travel to the hosts you select.
+              Termforge does not collect or store your app data on developer-operated servers. It
+              has no Termforge account, developer backend, analytics, advertising, tracking, cloud
+              sync, or remote diagnostic uploader. We do not sell your personal information or use
+              it for advertising.
+            </p>
+            <p>
+              Your app data stays on your device, except when you choose to connect to a remote
+              server, transfer or share files, use Apple services, or contact support. Website
+              requests and support emails are described separately below.
             </p>
           </section>
           <section id="local-data">
             <h2>Local app data</h2>
             <p>
-              Local SQLite storage contains server names, hostnames, ports, usernames, connection
-              preferences, known-host public keys and fingerprints, workspace layouts and pane
-              titles, settings, snippets, and public key metadata with opaque credential references.
+              Saved servers, hostnames, ports, usernames, connection preferences, known-host
+              fingerprints, workspaces, settings, snippets, public-key metadata, and
+              connection-history metadata are stored locally. Connection history contains session
+              times and outcomes; the app does not persist terminal transcripts or command history.
+              Active terminal output is held temporarily in memory.
             </p>
             <p>
-              Connection history records the related server, start/end times, and outcome. It is
-              distinct from terminal content: terminal transcripts and command history are not
-              persisted. Active terminals still hold output in bounded memory. User-authored
-              snippets or configuration text can contain sensitive information if you enter it.
-            </p>
-            <p>
-              The source applies iOS file protection to app-private metadata, sidecars, downloads,
-              and staging files, and marks private data excluded from backup. Backup exclusion is
-              system guidance, not a guarantee. No iCloud sync entitlement is configured.
-              Current-candidate OS-level protection and lifecycle behavior still require physical
-              acceptance.
-            </p>
-          </section>
-          <section id="purchases">
-            <h2>Purchases &amp; clock state</h2>
-            <p>
-              The planned launch model is a free download, an explicitly started seven-day
-              full-function trial and a US $14.99 one-time lifetime unlock, with localized Apple
-              prices elsewhere, no subscription and no automatic charge. StoreKit/payment validation
-              on a compatible later binary remains pending.
-            </p>
-            <p>
-              Apple processes the app's purchases, payments and applicable refunds. Termforge uses
-              StoreKit's verified product identifiers, original/purchase dates and
-              ownership/revocation state on device to compute trial or lifetime access. StoreKit
-              manages locally available transaction history. The app listens for entitlement updates
-              and offers explicit restore; no Termforge account or licensing backend receives
-              purchase records, and no persisted isPro flag grants access. The app does not request
-              your card details or Apple credentials through its own forms.
-            </p>
-            <p>
-              A non-synchronizing, device-only Keychain item stores a last-observed timestamp to
-              detect simple device-clock rollback. This item grants no access, is separate from SSH
-              credential protection, and may survive app removal. A corrected clock plus explicit
-              online restore can recover suspicious clock state after verified ownership is
-              rechecked. There is no continuously trusted time service, device fingerprint or
-              promise of perfect tamper resistance.
-            </p>
-            <p>
-              Trial expiry removes no hosts, keys, settings, files or local drafts. Existing local
-              retention, authentication, export and deletion rules still apply. Removing the app
-              does not delete Apple's purchase history, remote data, exported copies or necessarily
-              Keychain items. The current clock item is retained for proportionate rollback checks;
-              it does not identify an Apple account or contain payment information.
-            </p>
-            <p>
-              Purchase errors shown in the app are allowlisted categories, not raw transactions or
-              payment data. If you voluntarily seek support, provide redacted app/build/device
-              details and safe reproduction steps; never send Apple credentials, payment details or
-              unredacted receipts. Operator/contact and correspondence-retention practices remain
-              pending below.
-            </p>
-            <p>
-              This static website has no checkout, trial activation, purchase tracking or
-              transaction integration. Reading its planned offer does not send app purchase history
-              to the website. Hosting logs and Apple's own platform practices remain separate.
+              App-private data uses iOS file protection and is marked as excluded from backup.
+              Termforge does not offer iCloud sync. User-selected Files destinations and their
+              backup or synchronization settings are separate from the app.
             </p>
           </section>
           <section id="credentials">
             <h2>Credentials &amp; authentication</h2>
             <p>
-              Private keys and supported stored credentials use app-scoped iOS Keychain items
-              requiring a device passcode, with device-only, nonsynchronizing accessibility. Keys
-              created or imported through the current interface require Face ID, Touch ID or the
-              device passcode for protected use. Canceling authentication prevents access. Opening
-              the app or viewing public-key metadata does not unlock a private key.
-              Password/passphrase entry and private-key import occur through native prompts and file
-              handling; ordinary app metadata uses references rather than private key bytes.
+              Private keys and supported saved credentials are protected by app-scoped, device-only,
+              nonsynchronizing iOS Keychain storage. Protected key use requires device
+              authentication. Imported encrypted keys require their passphrase when used.
             </p>
             <p>
-              Imported encrypted OpenSSH Ed25519 keys retain their encrypted representation and
-              prompt for a passphrase on use. Remembering passphrases is currently unavailable.
-              Generated Ed25519 keys use Keychain protection; they are not Secure Enclave keys and
-              do not support generated-key passphrase encryption or private-key export.
-            </p>
-            <p>
-              SSH authentication communicates with the chosen server: password authentication sends
-              the password inside the verified SSH transport; key authentication uses the key to
-              authenticate. Private keys are not uploaded to a Termforge backend. Removing a
-              passcode or restoring onto another device can make credentials unavailable. Swift and
-              library memory copies prevent a perfect-memory-erasure guarantee.
+              Credentials are used to authenticate to your chosen server over SSH. Password
+              authentication sends the password within the encrypted SSH connection; public-key
+              authentication proves possession of the private key. We do not receive your passwords,
+              private keys, passphrases, or server credentials.
             </p>
           </section>
           <section id="remote-servers">
             <h2>Your remote servers</h2>
             <p>
-              The app connects over SSH to the host and port you choose, including a configured
-              supported bastion route. The destination receives your network address, authentication
-              exchange, commands, and file operations. SFTP uploads send selected file contents;
-              downloads receive remote content.
+              SSH/SFTP connections go to the hosts and ports you select. Those hosts and relevant
+              network providers receive connection information, including your network address. Your
+              chosen server receives authentication exchanges, commands, file operations, and
+              uploaded file contents.
             </p>
             <p>
-              Server and network operators have their own logging, access, and retention policies.
-              Your commands may write files or start processes on the server. Removing local app
-              data or disconnecting does not erase server logs, reverse remote actions, or delete
-              transferred files.
-            </p>
-            <p>
-              Host-key inspection and validation precede credential use in the implementation; an
-              unexpected changed key blocks connection. Independently verify fingerprints. These
-              mechanisms are not a certification or a guarantee against every threat.
+              Those servers operate under their owners’ policies. We do not operate or control them.
+              Disconnecting, deleting a saved server, or removing Termforge does not erase remote
+              logs, reverse commands, or remove transferred files.
             </p>
           </section>
           <section id="files-exports">
-            <h2>Imports, exports &amp; clipboard</h2>
+            <h2>Files, exports &amp; clipboard</h2>
             <p>
-              File import/upload uses native, user-selected Files access with bounded temporary
-              copies. Downloads and editor operations create protected temporary content; the source
-              removes completed/discarded and stale staging files, with crash cleanup. Interrupted
-              operations and file-provider behavior remain physical acceptance checks.
+              Import, upload, download, editing, export, clipboard, and sharing actions process the
+              content you select. Temporary copies are created for file operations and cleaned up
+              after completion, cancellation, or recovery from interrupted operations.
             </p>
             <p>
-              Configuration export uses an allowlist and excludes credential fields, key references,
-              and trusted-host records. Snippet commands and other public metadata remain
-              user-authored content; a scanner cannot guarantee they contain no manually entered
-              secrets. Review every export before sharing.
+              Configuration exports exclude credential fields, key references, and trusted-host
+              records. Your own snippets or other text may still contain secrets; review exports
+              before sharing. Files saved, copied, or shared outside the app are handled by the
+              destination you choose and must be deleted there separately.
+            </p>
+          </section>
+          <section id="purchases">
+            <h2>Apple purchases &amp; diagnostics</h2>
+            <p>
+              Apple handles App Store distribution, payments, and refunds. Termforge uses verified
+              StoreKit purchase and entitlement information on your device to determine trial or
+              lifetime access and restore purchases. We do not receive your payment-card details or
+              Apple Account credentials, and no developer licensing server receives purchase
+              records.
             </p>
             <p>
-              Saving to Files, copying public keys or terminal selections, and explicit share
-              actions can move data outside the app sandbox to a destination or file provider you
-              choose. That provider and iOS clipboard/backup features have their own practices.
-              Deleting the app cannot retrieve shared copies.
+              A device-only Keychain timestamp is used to detect device-clock rollback; it does not
+              identify your Apple Account. Local application diagnostics use restricted event/error
+              codes and operational counts or timings, rather than credentials, terminal output, or
+              file contents. Termforge does not upload them to us.
+            </p>
+            <p>
+              Apple may process purchases and system diagnostics under your Apple settings and
+              <a href="https://www.apple.com/legal/privacy/">Apple’s privacy policy</a>. These are
+              separate from Termforge’s app-data practices.
             </p>
           </section>
           <section id="diagnostics">
-            <h2>Diagnostics &amp; support</h2>
+            <h2>Email support</h2>
             <p>
-              Application diagnostics are restricted to allowlisted event/error codes and numeric
-              operational context such as counts and timings. The production logging paths exclude
-              raw server errors, hostnames, full paths, credentials, terminal output, clipboard
-              contents, and file bodies; dependency logging is suppressed. No app-owned remote
-              diagnostic uploader is configured.
+              If you email <a href="mailto:adrian.glazer@gmail.com">adrian.glazer@gmail.com</a>, we
+              receive your email address and the message or attachments you choose to send. This is
+              voluntary and is not required to use the app. Do not send passwords, private keys,
+              payment details, or unredacted terminal content.
             </p>
             <p>
-              Apple/iOS diagnostic handling depends on system settings and platform practices. This
-              draft does not assert that operating-system diagnostics never exist or that every
-              third-party component has received final release approval.
+              We use correspondence to respond to requests, investigate reported issues, and meet
+              applicable obligations. Access is limited to the operator and the email provider used
+              to deliver and store messages. Support email is handled through Gmail, subject to
+              <a href="https://policies.google.com/privacy">Google’s privacy policy</a>.
             </p>
             <p>
-              If you contact support once a real destination is supplied, the operator will receive
-              the information you send, such as your email address, report details, and redacted
-              attachments.
-              <span class="pending"
-                >[OWNER INPUT: support provider, purposes, access, retention period, and deletion
-                process]</span
-              >. Do not send secrets or unredacted content. See the
-              <a href="support#reports">reporting guide</a>.
-            </p>
-          </section>
-          <section id="retention">
-            <h2>Retention, deletion &amp; recovery</h2>
-            <p>
-              Saved metadata remains on the device until removed through the relevant app controls
-              or app-data removal. Deleting a saved key closes dependent sessions and coordinates
-              removal of its Keychain item and metadata through a recoverable deletion record. If
-              the operation is interrupted, it is retried after unlock/startup.
-            </p>
-            <p>
-              Uninstalling an iOS app may leave Keychain items. The implementation prevents silent
-              reuse after reinstallation and requires explicit reassociation or cleanup. New-device
-              restoration or changed protection settings can make old credentials unusable. Keep
-              original keys and reviewed configuration exports for recovery.
-            </p>
-            <p>
-              Background/idle lock initiates teardown of live sessions and temporary file authority.
-              Temporary-copy cleanup is implemented; secure erasure of flash storage and perfect
-              memory erasure are not promised. Copies on your servers, in Files providers, clipboard
-              destinations, exports, or backups must be managed separately.
-            </p>
-            <p>
-              <span class="pending"
-                >[OWNER INPUT: support-record retention/deletion, legally required retention, and
-                applicable privacy rights/request procedure]</span
-              >.
-            </p>
-          </section>
-          <section id="third-parties">
-            <h2>Components &amp; third parties</h2>
-            <p>
-              The app bundles components for its interface, terminal, SSH/SFTP, cryptography, and
-              storage, including Expo/React Native, SwiftTerm, Citadel with documented local
-              patches, and their dependencies. These components run in the client; their inclusion
-              alone does not establish a separate hosted data service.
-            </p>
-            <p>
-              Apple handles app distribution, StoreKit purchase/payment processing, refunds and
-              operating-system services under its practices. Chosen remote hosts, network providers,
-              and Files providers may process your data. Final SDK/archive privacy declarations and
-              dependency/notice review remain public-release requirements.
-            </p>
-            <p>
-              <span class="pending"
-                >[OWNER INPUT: operator-selected hosting/support vendors, processing locations,
-                transfers, and contractual disclosures where applicable]</span
-              >.
+              Support records are kept only as long as needed to resolve the request, handle related
+              follow-up or disputes, and meet legal retention obligations. You may request their
+              deletion at the address above; records that must be retained by law or for a necessary
+              legal claim may be retained for that purpose.
             </p>
           </section>
           <section id="website">
-            <h2>Website, hosting &amp; cookies</h2>
+            <h2>Website &amp; hosting</h2>
             <p>
-              This site serves local HTML, CSS, and brand images. It includes no JavaScript,
-              analytics, advertising, cookies, browser storage, remote fonts, embedded third-party
-              video, or contact form. Following an eventual App Store or contact link will take you
-              to that destination's service.
+              This static website uses no application analytics, advertising, tracking scripts,
+              contact forms, or site-set cookies. Images and video are served locally. External
+              links open services with their own privacy practices.
             </p>
             <p>
-              A hosting provider may process IP addresses, requested paths, timestamps, browser
-              details, and errors as part of serving and protecting the website. No production host
-              is selected in this draft. The supplied local Docker server disables access logs;
-              error logs may include request details. That configuration does not determine a future
-              provider's logging.
+              The configured website delivery uses Cloudflare and a web server. Serving and securing
+              requests requires processing technical information such as IP addresses, requested
+              URLs, timestamps, browser information, and errors. The website server disables routine
+              access logging; error logs and infrastructure security logs may contain request
+              details. This information is used to operate, protect, and troubleshoot the site,
+              rather than build advertising profiles.
             </p>
             <p>
-              <span class="pending"
-                >[OWNER INPUT: hosting provider, request-log purpose and retention, processing
-                location, and contact for deletion/privacy requests]</span
-              >. No consent banner is included because the supplied site introduces no cookie or
-              tracking mechanism.
+              Cloudflare’s processing is described in
+              <a href="https://www.cloudflare.com/privacypolicy/">its privacy policy</a>. Hosting
+              and email services may process information outside your country, including outside the
+              European Economic Area, under their applicable transfer safeguards. Infrastructure
+              records are subject to service settings and provider retention policies; contact us
+              with questions about a particular request.
+            </p>
+          </section>
+          <section id="retention">
+            <h2>Deletion &amp; your rights</h2>
+            <p>
+              Delete saved app information through the app’s relevant controls or remove app data
+              from your device. Uninstalling may leave iOS Keychain items; deleting keys in the app
+              before uninstalling removes their associated credentials. Remote files, exported
+              copies, backups, and Apple’s purchase history must be managed separately. We cannot
+              retrieve your local credentials or delete data on a server you operate.
+            </p>
+            <p>
+              Where applicable, support processing is necessary to respond to your request and
+              provide support; service-security and issue-handling records are processed for our
+              legitimate interests in operating a reliable service. Records required by law are
+              processed to meet that obligation.
+            </p>
+            <p>
+              Depending on applicable law, you may request access, correction, deletion,
+              restriction, or portability of personal information we hold, and object to processing
+              based on legitimate interests. Email the contact above. You may also complain to your
+              local data-protection authority, including Spain’s
+              <a href="https://www.aepd.es/">Agencia Española de Protección de Datos</a>. These
+              rights do not give us access to app data that exists only on your device.
             </p>
           </section>
           <section id="updates">
-            <h2>Policy updates &amp; contact</h2>
+            <h2>Updates &amp; contact</h2>
             <p>
-              Before public launch, the operator must finalize this draft, supply the effective
-              date, and make the policy available on a stable HTTPS URL and inside the app. Update
-              this policy when app behavior, vendors, or data flows change, and state the new
-              effective date.
+              We will update this policy when our practices change and show the revised effective
+              date here. Material changes will be explained through the website or app, with any
+              consent required by law obtained before the relevant processing.
             </p>
             <p>
-              <strong>Privacy contact:</strong>
-              <span class="pending">[OWNER INPUT: privacy email or working request method]</span>.
-              Legal rights, applicable jurisdiction, and the process for exercising them must be
-              confirmed by the operator. This draft does not replace those rights.
+              For privacy questions or requests, email
+              <a href="mailto:adrian.glazer@gmail.com">adrian.glazer@gmail.com</a> or write to the
+              operator at the address above.
             </p>
           </section>
         </div>
@@ -352,10 +268,13 @@
             <a href="privacy" aria-current="page">Privacy</a>
           </nav>
         </div>
-        <!-- LEGAL_OPERATOR / COPYRIGHT: owner-approved wording pending. -->
         <p class="small">
-          Website preview · App Store link, contact details, and legal review pending.
+          © 2026 Adrian Krzysztof Glazer<br />
+          VAT ID: ESZ3681468R · Reg. no: Z3681468R<br />
+          Calle Canarias, 6-6-43<br />03130 Santa Pola<br />Alicante<br />Spain<br />
+          Email: <a href="mailto:adrian.glazer@gmail.com">adrian.glazer@gmail.com</a>
         </p>
+        <p class="small">App Store review in progress · Download link coming after release.</p>
       </div>
     </footer>
   </body>

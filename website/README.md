@@ -3,8 +3,10 @@
 Self-contained static landing/support site. No framework, JavaScript, package
 installation, compilation, app source, credentials, or external service is needed.
 Copy this directory alone to preview or serve it. Hosting and public deployment
-are outside task 09. Availability, media, contacts, and legal content intentionally
-remain draft until the owner supplies verified inputs.
+are outside task 09. The owner reports the app is in App Store review as of 8 October 2026.
+Public availability and the listing URL remain pending. Company/contact details, euro pricing, and
+owner-supplied promotional media are filled in. Privacy and terms were updated on
+8 October 2026 using the owner’s instructions and Apple’s standard app license.
 
 ## Preview
 
@@ -68,7 +70,7 @@ docker run --rm --name termforge-website-preview \
 This preview binds only to the local machine and has no Traefik routing labels.
 Open <http://127.0.0.1:8091/> and stop with Ctrl+C. The Traefik Compose command
 above is for deployment; running it on a publicly reachable configured proxy
-can expose the website, whose owner/legal/contact/media inputs remain draft.
+can expose the website, whose public availability still requires confirmation.
 The nginx server runs as `nginx` on port 8080, with a healthcheck, read-only site
 files, and temporary runtime data under `/tmp`. No volumes or app directories are
 mounted. The base image is pinned to the digest observed during validation;
@@ -79,7 +81,7 @@ Compose, app data, repository metadata, and credentials are not served.
 
 Default access logging is off; nginx error logs go to stderr and can include
 request details. The Traefik/hosting provider can keep separate logs; review the
-privacy draft against the actual deployment. Public HTTPS is handled by
+privacy policy against the actual deployment. Public HTTPS is handled by
 Cloudflare, with HTTP routing from the tunnel through Traefik to nginx. Tunnel/DNS
 provisioning and public deployment were not performed by this configuration edit.
 The server's content
@@ -89,7 +91,7 @@ policy allows local styles/images/media and no scripts, forms, or embeds.
 
 - `index.html`: product story, workflow, features, demo/gallery, FAQ, availability.
 - `support.html`: getting started, troubleshooting, redacted reports, contact slots.
-- `privacy.html`, `terms.html`: substantive drafts requiring owner/legal review.
+- `privacy.html`, `terms.html`: privacy policy and terms linking Apple’s Standard EULA.
 - `styles.css`: shared palette, layout, phone breakpoints, focus and reduced motion.
 - `assets/brand.png`, `assets/favicon.png`: resized copies of the existing app icon.
 - `Dockerfile`, `.dockerignore`, `nginx.conf`: independent static container.
@@ -113,10 +115,12 @@ them consistent. No source generator or parent-directory build is required.
   visible `[OWNER INPUT…]` text. Add real working destinations, or omit the
   optional tracker. Keep sensitive security reports routed privately. Add `mailto:`
   links only when actual email addresses are supplied; there is no delivery form.
-- Search **`LEGAL_OPERATOR`**, **`COPYRIGHT`**, `[LEGAL…]`, and `[OWNER…]` across
-  terms/privacy/support. Confirm the operator, address, contacts, jurisdiction,
-  effective dates, the confirmed trial/lifetime model's legal provisions, Apple license relationship,
-  privacy rights, support vendors, correspondence retention, and hosting/log policy.
+- Privacy and terms include the supplied operator/contact details and an effective
+  date of 8 October 2026. They describe local app storage, voluntary Gmail support,
+  configured Cloudflare delivery, developer/user responsibilities, and refunds
+  handled by Apple. Keep the default Standard EULA in App Store Connect; do not
+  enter this explanatory website page as a custom EULA. Check the final archive’s
+  SDK practices and the actual hosting/log configuration before publication.
 - Search **`PRODUCTION_DOMAIN`**, **`CANONICAL_URL`**, **`SOCIAL_IMAGE_URL`** in
   each `<head>`. After selecting the real HTTPS domain and path, add the appropriate
   per-page canonical link and `og:url`, plus a real absolute `og:image` URL and
@@ -124,57 +128,50 @@ them consistent. No source generator or parent-directory build is required.
   Unique titles/descriptions, Open Graph text, social card type, and favicon are
   already present. No guessed public URL, rating, or structured data exists. Pricing is the confirmed task 10 decision, explicitly marked as the planned launch model.
 
-## Media replacement list
+## Promotional media
 
-These are finished layout placeholders; no missing files are referenced. Capture
-the final candidate with disposable hosts and harmless files. Never show passwords,
-private keys, real host details, personal files, or identifying terminal output.
+The owner supplied five iPhone screenshots and a vertical screen recording on
+2026-10-08. The home page now uses processed media from `assets/media/`.
 
-| Slot (`data-media-slot`) | Suggested local filename                                                       | Orientation / ratio         | Intended content and caption                                                                     | Proposed alt text                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `hero`                   | `assets/hero-terminal.webp`                                                    | iPhone portrait, 9:17 frame | Live terminal with accessory controls. “Your remote terminal, on iPhone.”                        | “Termforge on iPhone showing an SSH terminal connected to a disposable server.”           |
-| `terminal`               | `assets/screenshot-terminal.webp`                                              | Portrait, 9:16              | Harmless remote command and readable output. “Commands with room to work.”                       | “SSH terminal with sample command output and Escape, Tab, and arrow controls.”            |
-| `workspace`              | `assets/screenshot-workspace.webp`                                             | Landscape, 16:9             | Two panes and a saved layout. “Context, side by side.”                                           | “Landscape workspace with two independent remote terminals and pane controls.”            |
-| `files`                  | `assets/screenshot-files.webp`                                                 | Portrait, 9:16              | SFTP/editor with a sample UTF-8 file. “A small edit, close at hand.”                             | “Remote sample text file open in the SFTP editor with save and discard controls.”         |
-| `keys`                   | `assets/screenshot-keys.webp`                                                  | Portrait, 9:16              | Fictional profile or public key metadata. “Know the destination.”                                | “SSH server or key management showing a fictional profile and public fingerprint.”        |
-| `demo`                   | `assets/walkthrough.mp4`, `assets/walkthrough.webm`, `assets/demo-poster.webp` | Landscape, 16:9             | Verify host, connect, split, browse/edit a harmless file. Preserve the text sequence beneath it. | Poster: “Walkthrough of connecting, arranging terminal panes, and editing a sample file.” |
+- Hero: redacted terminal screenshot.
+- Gallery: terminal, landscape workspace, SFTP browser, and SSH-key promotional screenshots.
+- Demo: silent 10-second highlight reel using source ranges 56–58, 64–68, and 138–142 seconds.
+  It shows live process output, SFTP browsing, and two terminal panes. Connection setup,
+  personal file contents, and loading waits are omitted. It plays on request with
+  a text description and a reduced-motion fallback.
+- `../promo-assets/promo-app-store/medium-display/`: JPEG promotional exports at 1179×2556 (portrait) and
+  2556×1179 (landscape), matching the owner's selected iPhone with Dynamic Island
+  (medium display) upload slot. `large-display/` preserves the separate 1320×2868
+  and 2868×1320 exports for the large-display slot. These are prepared files,
+  not evidence of App Store upload/approval.
+- `../promo-assets/promo-app-store/medium-display/keys.jpg`: edited SSH-key promotional capture.
+  The owner requested removal of the transient error message; the rest of the
+  captured interface is preserved. The website uses this edited screenshot in its
+  connection gallery.
 
-Replace each matching placeholder's inner frame with a genuine image; preserve its
-`figure`, anchor, and caption. Use the capture's real pixel dimensions as `width`
-and `height`, descriptive `alt`, and `loading="lazy" decoding="async"` below the
-fold. Load the hero normally. Use optimized WebP/PNG without embedded personal
-metadata. Preserve portrait/landscape sizing with `object-fit: contain`; do not
-crop meaningful controls. Remove “pending”/illustration labels only for actual media.
+The supplied username is replaced with `admin`; IP addresses, hostnames, and
+personal profile labels are hidden. Opaque masks are baked into every processed
+asset. Metadata and silent audio are removed. Originals in `../promo-assets/promo/` remain untouched, outside the website
+directory and Docker build context. nginx also denies the old `/assets/promo/`
+path if that folder is accidentally mounted into the server.
 
-For the demo, replace the `demo-slot` only after local files exist. For example:
+To regenerate these **specific** source captures, with FFmpeg and DejaVu fonts:
 
-```html
-<video
-  class="demo-video motion-media"
-  controls
-  playsinline
-  preload="none"
-  width="1280"
-  height="720"
-  poster="assets/demo-poster.webp"
-  aria-label="Termforge connection, panes, and SFTP walkthrough"
-  aria-describedby="demo-caption"
->
-  <source src="assets/walkthrough.webm" type="video/webm" />
-  <source src="assets/walkthrough.mp4" type="video/mp4" />
-  <track kind="captions" src="assets/walkthrough.en.vtt" srclang="en" label="English" default />
-  Your browser does not support this video. Use the text walkthrough below.
-</video>
+```sh
+python3 website/prepare-promo.py
 ```
 
-Add `id="demo-caption"` to its existing caption and add a CSS rule
-`.demo-video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }`.
-Create accurate captions before adding the track; speech requires a VTT file.
-Use a descriptive caption/transcript for a silent video. There is no autoplay;
-`preload="none"` prevents heavy initial media downloads. The existing reduced-motion
-rule hides `.motion-media` and leaves the text walkthrough visible. If a GIF is
-chosen instead, use the same class and keep a static/text fallback. Test replacement
-media, keyboard controls, captions, reduced motion, and no-JavaScript behavior again.
+Run from the repository root. The script invokes FFmpeg for the exact redaction,
+text overlays, resizing, JPEG/WebP encoding, and video editing; it does not redraw
+app UI. Video uses H.264, `-preset slow -crf 29`, 15 fps, 540-pixel width,
+`-pix_fmt yuv420p`, `-an`, `-map_metadata -1`, and `-movflags +faststart`.
+Website screenshots use WebP at quality 78; App Store exports use JPEG quality 5.
+Do not reuse the masks for a different recording or screenshot without rechecking
+positions and reviewing every output. Review dimensions, legibility, redaction,
+and current app accuracy before submitting.
+
+Sources: [Apple screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
+and [App Review Guidelines, §2.3](https://developer.apple.com/app-store/review/guidelines/).
 
 ## Claim provenance (repository context, not runtime dependencies)
 
@@ -192,18 +189,21 @@ current-candidate physical checks. Forwarding/bastion implementation is describe
 with that explicit evidence limit. No unresolved safeguard, perfect erasure,
 security certification, background persistence, or unsupported platform is advertised.
 
-Terms are drafts with jurisdiction-specific provisions deliberately unresolved.
-The Apple-license review point was checked against [Apple's current Developer
-Program agreement, Schedule 1 §3.2 and Exhibit B](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/).
-Final Apple license choice and mandatory terms remain owner/legal work.
+The owner selected Apple’s [Standard EULA](https://www.apple.com/legal/internet-services/itunes/dev/stdeula/)
+for the app license. The website explains app responsibilities without adding a
+custom license or liability cap. It does not promise or prohibit Apple refunds;
+mandatory consumer rights remain intact. Apple’s own privacy policy applies to
+Apple services; Termforge’s policy describes its separate data practices.
 
 ## Prelaunch checklist
 
-- [ ] Owner/legal approval of terms, privacy, operator/copyright, dates and jurisdiction.
-- [ ] Real support and private security contacts; finalize correspondence/hosting policies.
+- [x] Apply owner instructions to privacy/terms, company details, date, and Standard EULA choice.
+- [x] Use supplied email for support/security/privacy and document voluntary correspondence.
+- [ ] Verify hosting/provider logging and retention settings against the policy.
 - [ ] Confirm current app release/device/security/notice and StoreKit gates, registered IAPs, localized prices and public availability.
 - [ ] Real HTTPS App Store URL everywhere; adjust availability, actions, footer and FAQ.
-- [ ] Replace all media slots with reviewed current-candidate captures/demo and captions.
+- [x] Fill media slots with redacted owner-supplied screenshots and a silent edited recording.
+- [ ] Review current-candidate media before Store submission.
 - [ ] Set production domain, per-page canonical/OG URLs and real social image.
 - [ ] Publish privacy/support on stable HTTPS URLs through a separately authorized task;
       add the real policy link inside the app through a focused app follow-up.
@@ -258,7 +258,7 @@ This directory remains independently copyable; those relative documentation
 links are repository maintenance references, not served website links.
 
 The planned launch model is free download; an explicitly started seven-day
-trial with every feature; then **US $14.99 once** for a non-expiring lifetime
+trial with every feature; then **€14.99 once** for a non-expiring lifetime
 unlock. No subscription or automatic charge. Buying immediately is allowed.
 The app's original verified Apple trial acquisition starts exactly 168 hours;
 reinstall/restore under the same account never restarts it. Every remote entry
@@ -270,15 +270,14 @@ verified access works offline, while trials retain their original expiry.
 Copy locations: `index.html` hero, prominent `#pricing`, purchase FAQs and closing
 availability/action copy; `support.html#purchases`; `terms.html#commercial`;
 `privacy.html#purchases`. Each distinguishes the app from this static website,
-which does not start trials or take payment. US $14.99 is never described as a
+which does not start trials or take payment. €14.99 is never described as a
 worldwide fixed price: other storefronts use Apple's localized prices and the
 Apple purchase sheet supplies the applicable price. Update these locations,
 app panels and task 11 store materials together if the owner changes the offer.
 
 The existing signed task 08 candidate predates StoreKit access enforcement. The
 owner reports waiting for distribution; purchase validation needs a later
-compatible binary. Keep planned-offer wording, pending App Store links and draft
-legal/contact/media placeholders until release evidence, actual Apple validation
+compatible binary. Keep planned-offer wording, pending App Store links until release evidence, actual Apple validation
 and a real public listing URL exist. No account, commercial setup, Family Sharing,
 refund guarantee, public URL or successful production purchase is invented.
 

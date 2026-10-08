@@ -10,3 +10,6 @@
 !styles.css
 !assets/
 !assets/**
+
+# Original promotional captures contain private server identifiers.
+assets/promo/
