@@ -1,46 +1,29 @@
-# App Store material draft
+# App Store publishing materials
 
-These drafts describe the reviewed implementation. Publish only after the
+These materials describe the reviewed implementation. Publish only after the
 signed candidate/device gates in [release-checklist.md](release-checklist.md)
 pass. No store record, URL, screenshot or reviewer credential is invented here.
-Task 11 owns the final store-material package; preserve its independent work.
+Task 11’s completed package and remaining owner inputs are linked below.
 
-## Proposed listing
+## Current materials package — 2026-10-08
 
-- **Name:** Termforge
-- **Subtitle:** SSH terminals for iPhone
-- **Keywords:** ssh,terminal,sftp,console,server,developer,ed25519,workspace,snippets,tunnel
-- **Suggested category:** Developer Tools; owner confirms in App Store Connect.
+The owner confirms version **0.1.0 (13)** includes the seven-day trial and lifetime
+purchase options. Inclusion is confirmed; unreported purchase-test results remain
+separate from this statement.
 
-### Description
+The owner reports version **0.1.0 (13)** is in App Store review. Task 11's local
+materials are complete: see [package index](../release/app-store/README.md),
+[paste-ready en-US fields](../release/app-store/en-US/), and
+[submission worksheet](../release/app-store/submission-worksheet.md).
+Screenshots remain under `promo-assets/promo-app-store`, with separate large and
+medium sets. The owner will supply the public App Store URL once ready.
 
-Connect to your remote servers from iPhone with Termforge. Organize SSH terminals
-into saved split-pane workspaces, keep useful commands as snippets, and manage
-remote files with SFTP and a simple text editor.
-
-Use password or Ed25519 key authentication, review server fingerprints, and create
-local or remote TCP forwards. A single password-authenticated bastion hop can
-reach hosts on a private network. Choose terminal themes, font sizes and accessory
-controls for your workflow.
-
-Server settings and workspaces are stored on your device. Credentials and private
-keys use iOS Keychain and native secure prompts. Configuration exports exclude
-credential fields; review your snippets and other text before sharing them.
-Termforge requires no app account or subscription and includes no analytics.
-
-Planned launch offer: free download, an explicitly started seven-day trial with
-full access, then a US $14.99 one-time lifetime unlock. No automatic charge when
-the trial ends; buy immediately if preferred. Other storefronts use Apple's
-localized prices and the App Store purchase sheet supplies the applicable price.
-The original verified acquisition starts the trial; reinstall/restore under the
-same App Store account does not restart it. Expiry interrupts remote work while
-keeping saved hosts, keys, settings and local drafts available. Lifetime is a
-non-expiring unlock subject to Apple refunds/revocations, without a promise of
-perpetual OS support. Actual purchase validation and public availability are pending.
-
-An SSH server you are authorized to use is required. Commands execute on the
-remote host. iPhone running iOS 17 or later is required. Background or idle lock
-disconnects sessions; return to the app and reconnect to continue.
+Owner's corrected commercial offer: **€14.99 lifetime unlock**, with Apple-localized
+prices elsewhere; free download, explicitly acquired seven-day trial, no subscription
+or automatic charge. Store copy uses localized purchase-sheet pricing instead of
+a fixed dollar amount. Do not infer build 13's IAP/device acceptance from the older
+build 4 archive. Task 11 records missing purchase captures and private review access
+without inventing them. Historical release gates below still need actual evidence.
 
 ### Claims to exclude
 
@@ -59,14 +42,14 @@ name, copyright, primary language, distribution regions, price and support conta
 Task 10 now implements the planned trial/lifetime model in source; registered
 products and Apple purchase validation remain pending. Build 4 predates it and
 cannot support the new offer. Follow [monetization](monetization.md) for the free
-app, two non-consumables, US $14.99 base price, localized prices, restore/review
+app, two non-consumables, €14.99 reference price (owner correction), localized prices, restore/review
 metadata and owner-only commercial setup. Do not publish purchase claims until
 the later compatible candidate and store configuration are validated.
 
 Publish a stable HTTPS privacy policy and support page before public submission.
 The support URL must offer a real contact method. A marketing URL is optional;
-use an actual owner-controlled page. Final screenshots and reviewer server/access
-instructions also need owner inputs. Never put private credentials into this file.
+use an actual owner-controlled page. Real screenshots and graphics are complete in task 11; any private reviewer
+server/access still needs owner input. Never put private credentials into this file.
 
 ## Privacy and compliance requirements
 

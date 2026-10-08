@@ -1,22 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { SnippetRun } from '@/components/SnippetRun';
+import { ActionButton as Action } from '@/components/ActionButton';
+import { ServerRepository } from '@/servers/repository';
 import { ScreenShell } from '@/components/ScreenShell';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { SnippetRepository } from '@/snippets/repository';
-import { renderSnippet, snippetVariables } from '@/snippets/template';
+import { snippetVariables } from '@/snippets/template';
 import { useTheme } from '@/theme/ThemeProvider';
-import type { Snippet } from '@/types/domain';
+import type { Server, Snippet } from '@/types/domain';
 
 type Draft = {
   name: string;
@@ -41,12 +35,13 @@ export default function SnippetsScreen() {
   const [draft, setDraft] = useState<Draft>();
   const [editing, setEditing] = useState<Snippet>();
   const [preview, setPreview] = useState<Snippet>();
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [servers, setServers] = useState<Server[]>([]);
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
     try {
       const db = await openMetadataDatabase();
       setSnippets(await new SnippetRepository(db).list());
+      setServers(await new ServerRepository(db).list());
     } catch {
       setError('Snippets could not be loaded.');
     }
@@ -61,7 +56,6 @@ export default function SnippetsScreen() {
     if (!selected) return;
     setDraft(undefined);
     setPreview(selected);
-    setValues(Object.fromEntries(selected.variables.map((variable) => [variable, ''])));
     setError(undefined);
     router.setParams({ snippetId: undefined });
   }, [snippetId, snippets]);
@@ -125,22 +119,26 @@ export default function SnippetsScreen() {
   }
   function openPreview(snippet: Snippet) {
     setPreview(snippet);
-    setValues(Object.fromEntries(snippet.variables.map((variable) => [variable, ''])));
     setError(undefined);
   }
   if (draft)
     return (
       <ScrollView
         style={[styles.page, { backgroundColor: theme.background }]}
-        contentContainerStyle={styles.content}
+        automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
       >
         <ScreenShell
           compact
           title={editing ? 'Edit snippet' : 'New snippet'}
-          message="Commands remain inert until you explicitly run them from a connected terminal."
+          message="Save a command, choose a server, then run it from the terminal. Use {{name}} for values you want to fill in each time."
         />
-        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: theme.surface, marginHorizontal: 24, marginBottom: 24 },
+          ]}
+        >
           <Field
             label="Name"
             value={draft.name}
@@ -175,72 +173,38 @@ export default function SnippetsScreen() {
         </View>
       </ScrollView>
     );
-  if (preview) {
-    let rendered: string | undefined;
-    try {
-      rendered = renderSnippet(preview.commandTemplate, values);
-    } catch (caught) {
-      rendered = caught instanceof Error ? caught.message : undefined;
-    }
+  if (preview)
     return (
-      <ScrollView
-        style={[styles.page, { backgroundColor: theme.background }]}
-        contentContainerStyle={styles.content}
-      >
-        <ScreenShell
-          compact
-          title="Run snippet"
-          message="Review this command, then explicitly send it from the terminal composer. It will not run automatically."
-        />
-        <View style={[styles.card, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.heading, { color: theme.text }]}>{preview.name}</Text>
-          {preview.variables.map((variable) => (
-            <Field
-              key={variable}
-              label={variable}
-              value={values[variable] ?? ''}
-              onChangeText={(value) => setValues({ ...values, [variable]: value })}
-            />
-          ))}
-          <Text selectable style={[styles.command, { color: theme.accent }]}>
-            {rendered}
-          </Text>
-          <Text style={{ color: theme.muted }}>
-            Opening the composer does not execute the command. You must press Send from a connected
-            terminal.
-          </Text>
-          {rendered && !rendered.startsWith('Provide a value') ? (
-            <Action
-              label="Open terminal composer"
-              onPress={() => router.push({ pathname: '/terminal', params: { snippet: rendered } })}
-            />
-          ) : null}
-          <Action label="Back to snippets" onPress={() => setPreview(undefined)} />
-        </View>
-      </ScrollView>
+      <SnippetRun
+        key={preview.id}
+        snippet={preview}
+        servers={servers}
+        onBack={() => setPreview(undefined)}
+      />
     );
-  }
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title="Snippets"
         message="Reusable commands are stored locally and never execute automatically."
       />
       <View style={styles.toolbar}>
-        <Pressable
-          accessibilityRole="button"
+        <Action
+          label="Add snippet"
           onPress={() => {
             setDraft(blankDraft());
             setEditing(undefined);
             setError(undefined);
           }}
-        >
-          <Text style={{ color: theme.accent }}>Add snippet</Text>
-        </Pressable>
+        />
       </View>
       {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
         {snippets.length === 0 ? (
           <Text style={{ color: theme.muted }}>No snippets yet.</Text>
         ) : null}
@@ -257,20 +221,14 @@ export default function SnippetsScreen() {
               {snippet.commandTemplate}
             </Text>
             <View style={styles.actions}>
-              <Pressable accessibilityRole="button" onPress={() => openPreview(snippet)}>
-                <Text style={{ color: theme.accent }}>Prepare run</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => edit(snippet)}>
-                <Text style={{ color: theme.accent }}>Edit</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => remove(snippet)}>
-                <Text style={{ color: theme.danger }}>Delete</Text>
-              </Pressable>
+              <Action label="Run on server" onPress={() => openPreview(snippet)} />
+              <Action label="Edit" onPress={() => edit(snippet)} />
+              <Action label="Delete" danger onPress={() => remove(snippet)} />
             </View>
           </View>
         ))}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 function Field(props: React.ComponentProps<typeof TextInput> & { label: string }) {
@@ -288,18 +246,6 @@ function Field(props: React.ComponentProps<typeof TextInput> & { label: string }
     </View>
   );
 }
-function Action({ label, onPress }: { label: string; onPress: () => void }) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[styles.action, { borderColor: theme.accent }]}
-    >
-      <Text style={{ color: theme.accent }}>{label}</Text>
-    </Pressable>
-  );
-}
 const styles = StyleSheet.create({
   page: { flex: 1 },
   content: { padding: 24, gap: 12 },
@@ -311,6 +257,5 @@ const styles = StyleSheet.create({
   error: { padding: 24, paddingBottom: 0 },
   heading: { fontSize: 17, fontWeight: '700' },
   command: { fontFamily: 'Courier', fontSize: 12 },
-  actions: { flexDirection: 'row', gap: 16 },
-  action: { borderWidth: 1, borderRadius: 8, padding: 10 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });

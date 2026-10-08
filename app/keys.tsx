@@ -1,8 +1,9 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { safeError } from '@/application/errors';
+import { ActionButton as Action } from '@/components/ActionButton';
 import { ScreenShell } from '@/components/ScreenShell';
 import { TermforgeNative } from '@/native/termforgeNative';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
@@ -76,7 +77,10 @@ export default function KeysScreen() {
   async function generate() {
     try {
       setError(undefined);
-      if (!name.trim()) throw new Error('Give this SSH key a name.');
+      if (!name.trim()) {
+        setError('Give this SSH key a name.');
+        return;
+      }
       await saveNativeKey(await TermforgeNative.generateEd25519Key('userPresence'), name);
     } catch (caught) {
       setError(safeError(caught).safeMessage);
@@ -85,7 +89,10 @@ export default function KeysScreen() {
   async function importKey() {
     try {
       setError(undefined);
-      if (!name.trim()) throw new Error('Give this SSH key a name before importing it.');
+      if (!name.trim()) {
+        setError('Give this SSH key a name before importing it.');
+        return;
+      }
       const asset = await TermforgeNative.pickLocalFile('key');
       await saveNativeKey(
         await TermforgeNative.importEd25519Key(asset.handle, 'userPresence'),
@@ -176,13 +183,17 @@ export default function KeysScreen() {
     }
   }
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title={returnTo === 'server-draft' ? 'New key' : 'SSH keys'}
         message="Private keys are protected by iOS Keychain. Public keys can be shared with your servers."
       />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.content}>
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
           <Text accessibilityRole="header" style={[styles.name, { color: theme.text }]}>
             Protected by your iPhone
@@ -289,8 +300,7 @@ export default function KeysScreen() {
             <Text style={[styles.publicHint, { color: theme.muted }]}>
               Select the public key to copy it into authorized_keys.
             </Text>
-            <Pressable
-              accessibilityRole="button"
+            <Action
               onPress={() => {
                 void TermforgeNative.copyText(key.publicKey)
                   .then(() =>
@@ -301,35 +311,28 @@ export default function KeysScreen() {
                   )
                   .catch(() => setError('The public key could not be copied.'));
               }}
-            >
-              <Text style={{ color: theme.accent }}>Copy public key</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
+              label="Copy public key"
+            />
+            <Action
               onPress={() => {
                 void TermforgeNative.copyText(key.publicKey)
                   .then(() => TermforgeNative.shareClipboard())
                   .catch(() => setError('The public key could not be exported.'));
               }}
-            >
-              <Text style={{ color: theme.accent }}>Export public key</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
+              label="Export public key"
+            />
+            <Action
               onPress={() => {
                 setRenaming(key);
                 setRename(key.name);
               }}
-            >
-              <Text style={{ color: theme.accent }}>Rename key</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => remove(key)}>
-              <Text style={{ color: theme.danger }}>Delete key</Text>
-            </Pressable>
+              label="Rename key"
+            />
+            <Action onPress={() => remove(key)} label="Delete key" danger />
           </View>
         ))}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 function Field(props: React.ComponentProps<typeof TextInput> & { label: string }) {
@@ -347,18 +350,6 @@ function Field(props: React.ComponentProps<typeof TextInput> & { label: string }
     </View>
   );
 }
-function Action({ label, onPress }: { label: string; onPress: () => void }) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[styles.action, { borderColor: theme.accent }]}
-    >
-      <Text style={{ color: theme.accent }}>{label}</Text>
-    </Pressable>
-  );
-}
 const styles = StyleSheet.create({
   page: { flex: 1 },
   content: { padding: 24, gap: 12 },
@@ -367,7 +358,6 @@ const styles = StyleSheet.create({
   field: { gap: 5 },
   input: { borderWidth: 1, borderRadius: 8, padding: 10 },
   actions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  action: { borderWidth: 1, borderRadius: 8, padding: 10 },
   name: { fontSize: 17, fontWeight: '700' },
   publicHint: { fontSize: 12 },
   publicKey: { fontSize: 11 },

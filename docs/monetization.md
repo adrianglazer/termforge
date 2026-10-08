@@ -5,6 +5,18 @@ complete; Apple compilation, registered product setup and actual purchase
 validation remain release blockers. No commercial setting, public submission,
 website deployment or EAS build was performed by task 10.
 
+## Current owner correction — 2026-10-08
+
+The owner confirms version **0.1.0 (13)** includes the seven-day trial and lifetime
+purchase options. Inclusion is confirmed; unreported purchase-test results remain
+separate from this statement.
+
+The lifetime price is **€14.99**, not US $14.99. Other storefronts use Apple’s
+localized prices. The owner reports version 0.1.0 (13) is in review; this does not
+by itself verify its IAP configuration or purchase acceptance. Earlier task 10
+implementation evidence below is historical. The final publishing package is in
+[release/app-store](../release/app-store/README.md).
+
 ## Offer and product configuration
 
 Free download. **7 days free. Full access. Pay once. No subscription.** The trial
@@ -21,10 +33,10 @@ products.** Before setup, inspect existing products and reuse matching registere
 IDs; update the two constants and local test configuration together if needed.
 Report incompatible Family Sharing rather than silently changing it.
 
-| Product | Identifier                              | Type           | US base price | en-US display name | en-US description                            |
-| ------- | --------------------------------------- | -------------- | ------------- | ------------------ | -------------------------------------------- |
-| Trial   | `com.adrianglazer.termforge.trial7days` | Non-consumable | Free / Tier 0 | 7-day Trial        | Full access for 7 days. No automatic charge. |
-| Unlock  | `com.adrianglazer.termforge.lifetime`   | Non-consumable | $14.99        | Lifetime Unlock    | Full Termforge access. Pay once.             |
+| Product | Identifier                              | Type           | Reference price | en-US display name | en-US description                            |
+| ------- | --------------------------------------- | -------------- | --------------- | ------------------ | -------------------------------------------- |
+| Trial   | `com.adrianglazer.termforge.trial7days` | Non-consumable | Free / Tier 0   | 7-day Trial        | Full access for 7 days. No automatic charge. |
+| Unlock  | `com.adrianglazer.termforge.lifetime`   | Non-consumable | €14.99          | Lifetime Unlock    | Full Termforge access. Pay once.             |
 
 Display names are within 30 characters; descriptions within 45. Other storefronts
 use Apple's localized price points, not a hardcoded dollar amount. The app uses
@@ -36,7 +48,8 @@ Owner setup (prepared here; not executed):
 
 1. Inspect existing IAP IDs, types, localizations, availability and Family Sharing.
    Keep app download price free. Configure both non-consumables above, with
-   United States as paid-product base region and $14.99 base price. Owner selects
+   the owner’s €14.99 reference price and Apple-localized prices. Confirm the
+   actual base region and localized schedule in App Store Connect. Owner selects
    territories/tax category and checks localized prices. No future increase.
 2. Keep Family Sharing disabled initially for both. The adapter accepts purchased
    ownership only; sharing is not implemented or promised. Existing incompatible

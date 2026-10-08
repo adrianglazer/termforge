@@ -1,5 +1,6 @@
 import { Link } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { ActionButton } from '@/components/ActionButton';
 import { useAccess } from '@/access/AccessProvider';
 import { accessStatus, purchaseMessage } from '@/domain/access';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,15 +14,11 @@ export function AccessPanel() {
     action: 'trial' | 'lifetime' | 'restore' | 'retry',
     disabled = false,
   ) => (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: access.busy || disabled }}
+    <ActionButton
+      label={title}
       disabled={access.busy || disabled}
       onPress={() => void act(action)}
-      style={{ paddingVertical: 12, opacity: access.busy || disabled ? 0.5 : 1 }}
-    >
-      <Text style={{ color: theme.accent }}>{title}</Text>
-    </Pressable>
+    />
   );
   return (
     <View style={{ gap: 10 }}>

@@ -33,6 +33,68 @@ class ControlledSessionAdapter implements SessionAdapter {
 }
 
 describe('controlled session controller', () => {
+  it('prevents duplicate connections to a pane, including concurrent taps, and allows reconnect after close', async () => {
+    const adapter = new ControlledSessionAdapter();
+    const sessions = new SessionController(adapter);
+    const first = sessions.create('pane', 'server');
+    await expect(sessions.create('pane', 'server')).rejects.toThrow('already has a session');
+    const id = await first;
+    await expect(sessions.create('pane', 'other-server')).rejects.toThrow('already has a session');
+    expect(adapter.created).toHaveLength(1);
+    await sessions.close(id);
+    const replacement = await sessions.create('pane', 'server');
+    expect(replacement).not.toBe(id);
+    expect(sessions.forPane('pane')?.sessionId).toBe(replacement);
+    sessions.dispose();
+  });
+
+  it('allows a retry after native session creation fails', async () => {
+    const adapter = new ControlledSessionAdapter();
+    let fail = true;
+    const create = adapter.createSession.bind(adapter);
+    adapter.createSession = async () => {
+      if (fail) {
+        fail = false;
+        throw new Error('Unavailable');
+      }
+      return create();
+    };
+    const sessions = new SessionController(adapter);
+    await expect(sessions.create('pane', 'server')).rejects.toThrow('Unavailable');
+    await expect(sessions.create('pane', 'server')).resolves.toBe('session-1');
+    sessions.dispose();
+  });
+
+  it('retains forwarding controls across pane reopening and forgets them on close', async () => {
+    const adapter = new ControlledSessionAdapter();
+    const sessions = new SessionController(adapter);
+    const id = await sessions.create('pane', 'server');
+    const forwards = [{ id: 'forward', kind: 'local' as const, summary: '8080 → localhost:80' }];
+    sessions.setForwards(id, forwards);
+    adapter.emit({ sessionId: id, generation: 1, sequence: 2, state: 'connecting' });
+    expect(sessions.forPane('pane')?.forwards).toEqual(forwards);
+    await sessions.close(id);
+    await sessions.create('pane', 'server');
+    expect(sessions.forPane('pane')?.forwards).toBeUndefined();
+    sessions.dispose();
+  });
+
+  it('keeps a session reachable when disconnect fails so the user can retry', async () => {
+    const adapter = new ControlledSessionAdapter();
+    const close = adapter.disconnect.bind(adapter);
+    adapter.disconnect = async () => {
+      throw new Error('Busy');
+    };
+    const sessions = new SessionController(adapter);
+    const id = await sessions.create('pane', 'server');
+    await expect(sessions.close(id)).rejects.toThrow('Busy');
+    expect(sessions.forPane('pane')?.sessionId).toBe(id);
+    adapter.disconnect = close;
+    await sessions.close(id);
+    expect(sessions.forPane('pane')).toBeUndefined();
+    sessions.dispose();
+  });
+
   it('keeps four independent pane sessions isolated', async () => {
     const adapter = new ControlledSessionAdapter();
     const sessions = new SessionController(adapter, () => '2026-09-17T00:00:00.000Z');

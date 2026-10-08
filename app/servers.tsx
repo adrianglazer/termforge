@@ -6,12 +6,12 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { HomeActions, HomeTools, HelpFooter } from '@/components/HomeNavigation';
+import { ActionButton } from '@/components/ActionButton';
 import { ScreenShell } from '@/components/ScreenShell';
 import { KeyRepository } from '@/keys/repository';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
@@ -125,6 +125,21 @@ export default function ServersScreen() {
     }
   }
   function confirmDelete(server: Server) {
+    const dependents = servers.filter((item) => item.jumpServerId === server.id);
+    if (dependents.length) {
+      Alert.alert(
+        'Server is used as a jump host',
+        `Change the jump host for ${dependents.map((item) => item.name).join(', ')} before deleting this server.`,
+      );
+      return;
+    }
+    if (liveSessions.some((session) => session.serverId === server.id)) {
+      Alert.alert(
+        'Server is connected',
+        'Disconnect its workspace terminals before deleting this server.',
+      );
+      return;
+    }
     Alert.alert('Delete server?', `Remove ${server.name}? This does not delete any SSH key.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -149,6 +164,8 @@ export default function ServersScreen() {
       <ScrollView
         style={[styles.page, { backgroundColor: theme.background }]}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
         <Pressable accessibilityRole="button" onPress={closeDraft} style={styles.backButton}>
           <Text style={{ color: theme.accent }}>‹ Back to your servers</Text>
@@ -267,7 +284,12 @@ export default function ServersScreen() {
                 <Text style={{ color: !draft.jumpServerId ? theme.accent : theme.text }}>None</Text>
               </Pressable>
               {servers
-                .filter((server) => server.id !== editing?.id)
+                .filter(
+                  (server) =>
+                    server.id !== editing?.id &&
+                    server.authMethod === 'password' &&
+                    !server.jumpServerId,
+                )
                 .map((server) => (
                   <Pressable
                     key={server.id}
@@ -292,37 +314,12 @@ export default function ServersScreen() {
                 ))}
             </View>
           </View>
-          <DraftField
-            label="Connect timeout (seconds)"
-            value={draft.timeoutSeconds}
-            keyboardType="number-pad"
-            onChangeText={(timeoutSeconds) => setDraft({ ...draft, timeoutSeconds })}
-          />
-          <DraftField
-            label="Keepalive (seconds)"
-            value={draft.keepaliveSeconds}
-            keyboardType="number-pad"
-            onChangeText={(keepaliveSeconds) => setDraft({ ...draft, keepaliveSeconds })}
-          />
-          <DraftField
-            label="Terminal type"
-            value={draft.terminalType}
-            autoCapitalize="none"
-            onChangeText={(terminalType) => setDraft({ ...draft, terminalType })}
-          />
-          <DraftField
-            label="Startup command (optional)"
-            value={draft.startupCommand}
-            autoCapitalize="none"
-            onChangeText={(startupCommand) => setDraft({ ...draft, startupCommand })}
-          />
-          <View style={styles.switchRow}>
-            <Text style={{ color: theme.text }}>Reconnect after interruption</Text>
-            <Switch
-              value={draft.reconnect}
-              onValueChange={(reconnect) => setDraft({ ...draft, reconnect })}
-            />
-          </View>
+          <Text style={{ color: theme.muted }}>
+            Advanced connection settings are not available in this build. Connections use a
+            15-second network timeout and xterm-256color. Failed initial connections may retry;
+            interrupted sessions must be reconnected manually. Keepalive and startup commands are
+            not applied.
+          </Text>
           {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
           <Pressable
             accessibilityRole="button"
@@ -369,7 +366,7 @@ export default function ServersScreen() {
                   {server.username}@{server.host}:{server.port}
                 </Text>
                 <Text style={{ color: theme.muted }}>
-                  {server.authMethod} · {server.terminalType}
+                  {server.authMethod === 'key' ? 'SSH key' : 'Password'} authentication
                 </Text>
                 <Text style={{ color: theme.muted }}>
                   Saved profile ·{' '}
@@ -386,15 +383,9 @@ export default function ServersScreen() {
                   ))}
               </Pressable>
               <View style={styles.serverActions}>
-                <Pressable accessibilityRole="button" onPress={() => startEdit(server)}>
-                  <Text style={{ color: theme.accent }}>Edit</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={() => startDuplicate(server)}>
-                  <Text style={{ color: theme.accent }}>Duplicate</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={() => confirmDelete(server)}>
-                  <Text style={{ color: theme.danger }}>Delete</Text>
-                </Pressable>
+                <ActionButton label="Edit" onPress={() => startEdit(server)} />
+                <ActionButton label="Duplicate" onPress={() => startDuplicate(server)} />
+                <ActionButton label="Delete" danger onPress={() => confirmDelete(server)} />
               </View>
             </View>
           ))}
@@ -475,7 +466,7 @@ const styles = StyleSheet.create({
   serverCard: { padding: 14, borderRadius: 12, gap: 12 },
   serverMain: { gap: 3 },
   serverName: { fontSize: 17, fontWeight: '700' },
-  serverActions: { flexDirection: 'row', gap: 20 },
+  serverActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   card: { margin: 24, marginTop: 0, padding: 18, borderRadius: 12, gap: 14 },
   field: { gap: 5 },
   label: { fontSize: 13 },

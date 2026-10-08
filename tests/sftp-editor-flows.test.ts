@@ -152,6 +152,30 @@ describe('SFTP and editor flows', () => {
     expect(native.calls).not.toContain('cancel:session:download-b');
   });
 
+  it('treats native upload cancellation as cancelled without a retry error', async () => {
+    const native = new ControlledSftpAdapter();
+    native.uploadFile = async () => {
+      throw new AppError('CANCELLED', 'User cancelled');
+    };
+    const controller = new SftpController(native, () => 'upload-cancelled');
+    const result = await controller.upload('session', 'local', '/home/file');
+    expect(result.state).toBe('cancelled');
+    expect(result.error).toBeUndefined();
+    expect(controller.progress(result.id, '10', '20')).toMatchObject({ state: 'cancelled' });
+  });
+
+  it('preserves actual transfer failures for the retry message', async () => {
+    const native = new ControlledSftpAdapter();
+    native.uploadFile = async () => {
+      throw new AppError('TIMEOUT', 'Timeout');
+    };
+    const controller = new SftpController(native, () => 'upload-failed');
+    expect(await controller.upload('session', 'local', '/home/file')).toMatchObject({
+      state: 'failed',
+      error: 'The operation timed out.',
+    });
+  });
+
   it('supports dirty editing, find/replace, discard, and write-back conflict protection', async () => {
     const native = new ControlledSftpAdapter();
     const controller = new SftpController(native, () => 'transfer-1');

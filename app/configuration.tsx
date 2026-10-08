@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { safeError } from '@/application/errors';
 import { TermforgeNative } from '@/native/termforgeNative';
+import { ActionButton } from '@/components/ActionButton';
 import { ScreenShell } from '@/components/ScreenShell';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { ServerRepository } from '@/servers/repository';
@@ -10,12 +11,13 @@ import { SettingsRepository } from '@/settings/repository';
 import { SnippetRepository } from '@/snippets/repository';
 import { createExport, parseImport } from '@/storage/export';
 import { terminalThemes } from '@/theme/tokens';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useTheme, useThemeRefresh } from '@/theme/ThemeProvider';
 import { WorkspaceRepository } from '@/workspaces/repository';
 import type { Server } from '@/types/domain';
 
 export default function ConfigurationScreen() {
   const theme = useTheme();
+  const refreshTheme = useThemeRefresh();
   const [exportText, setExportText] = useState('');
   const [importText, setImportText] = useState('');
   const [error, setError] = useState<string>();
@@ -43,6 +45,8 @@ export default function ConfigurationScreen() {
     void create();
   }, [create]);
   async function importConfiguration() {
+    setMessage(undefined);
+    setError(undefined);
     try {
       if (new TextEncoder().encode(importText).byteLength > 1_000_000) {
         setError('Configuration is too large.');
@@ -79,6 +83,7 @@ export default function ConfigurationScreen() {
         });
       });
       await TermforgeNative.setAutoLockMinutes(parsed.settings.autoLockMinutes);
+      await refreshTheme();
       setMessage(
         'Configuration imported. Imported server profiles require credential or key rebinding before use.',
       );
@@ -89,21 +94,39 @@ export default function ConfigurationScreen() {
     }
   }
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title="Import & export"
         message="This export intentionally excludes passwords, Keychain references, SSH keys, known-host trust, history, live sessions, startup commands, and environment values."
       />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.content}>
         <Text style={[styles.heading, { color: theme.text }]}>Export</Text>
         <Text selectable style={[styles.code, { color: theme.accent, borderColor: theme.muted }]}>
           {exportText}
         </Text>
-        <Pressable accessibilityRole="button" onPress={() => void create()}>
-          <Text style={{ color: theme.accent }}>Refresh export</Text>
-        </Pressable>
+        <ActionButton
+          label="Copy export"
+          disabled={!exportText}
+          onPress={() => {
+            void TermforgeNative.copyText(exportText)
+              .then(() => {
+                setMessage('Configuration copied.');
+                setError(undefined);
+              })
+              .catch(() => setError('The export could not be copied.'));
+          }}
+        />
+        <ActionButton onPress={() => void create()} label="Refresh export" />
         <Text style={[styles.heading, { color: theme.text }]}>Import</Text>
+        <Text style={{ color: theme.muted }}>
+          Items with matching IDs will be replaced. Export your current configuration first if you
+          want a backup.
+        </Text>
         <TextInput
           value={importText}
           onChangeText={setImportText}
@@ -115,13 +138,11 @@ export default function ConfigurationScreen() {
           placeholderTextColor={theme.muted}
           style={[styles.input, { color: theme.text, borderColor: theme.muted }]}
         />
-        <Pressable accessibilityRole="button" onPress={() => void importConfiguration()}>
-          <Text style={{ color: theme.accent }}>Import configuration</Text>
-        </Pressable>
+        <ActionButton onPress={() => void importConfiguration()} label="Import configuration" />
         {message ? <Text style={{ color: theme.accent }}>{message}</Text> : null}
         {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 const styles = StyleSheet.create({

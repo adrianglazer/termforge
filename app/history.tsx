@@ -29,14 +29,18 @@ export default function HistoryScreen() {
     }, [load]),
   );
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title="Connection history"
         message="This history contains only timing and safe outcomes—never commands, output, credentials, or private keys."
       />
       {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
         {items.length === 0 ? (
           <Text style={{ color: theme.muted }}>No saved connection history yet.</Text>
         ) : null}
@@ -55,8 +59,8 @@ export default function HistoryScreen() {
             ) : null}
           </View>
         ))}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 const styles = StyleSheet.create({

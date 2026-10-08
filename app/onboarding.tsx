@@ -8,13 +8,17 @@ import { useTheme } from '@/theme/ThemeProvider';
 export default function OnboardingScreen() {
   const theme = useTheme();
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title="Welcome to Termforge"
         message="A native iPhone SSH workstation—not a local Linux shell."
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
         <AccessPanel />
         <Step
           number="1"
@@ -41,8 +45,8 @@ export default function OnboardingScreen() {
         <Pressable accessibilityRole="button" onPress={() => router.push('/servers')}>
           <Text style={{ color: theme.accent }}>Set up a server</Text>
         </Pressable>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 function Step({ number, title, body }: { number: string; title: string; body: string }) {

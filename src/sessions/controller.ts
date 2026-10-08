@@ -17,6 +17,8 @@ export type NativeSessionEvent = {
   attempt?: number;
 };
 
+export type ManagedForward = { id: string; kind: 'local' | 'remote'; summary: string };
+
 export type ManagedSession = {
   sessionId: string;
   paneId: string;
@@ -26,6 +28,7 @@ export type ManagedSession = {
   sequence: number;
   createdAt: string;
   reconnectAttempt?: number;
+  forwards?: ManagedForward[];
 };
 
 type Listener = (sessions: ManagedSession[]) => void;
@@ -48,6 +51,7 @@ export const reconnectDelaySeconds = (attempt: number): number =>
 export class SessionController {
   private sessions = new Map<string, ManagedSession>();
   private closing = new Set<string>();
+  private creatingPanes = new Set<string>();
   private listeners = new Set<Listener>();
   private readonly subscription: { remove(): void };
 
@@ -59,18 +63,26 @@ export class SessionController {
   }
 
   async create(paneId: string, serverId: string): Promise<string> {
-    const sessionId = await this.adapter.createSession();
-    this.sessions.set(sessionId, {
-      sessionId,
-      paneId,
-      serverId,
-      state: 'created',
-      generation: 1,
-      sequence: 0,
-      createdAt: this.now(),
-    });
-    this.publish();
-    return sessionId;
+    if (this.forPane(paneId) || this.creatingPanes.has(paneId)) {
+      throw new Error('This pane already has a session. Open its terminal or disconnect it first.');
+    }
+    this.creatingPanes.add(paneId);
+    try {
+      const sessionId = await this.adapter.createSession();
+      this.sessions.set(sessionId, {
+        sessionId,
+        paneId,
+        serverId,
+        state: 'created',
+        generation: 1,
+        sequence: 0,
+        createdAt: this.now(),
+      });
+      this.publish();
+      return sessionId;
+    } finally {
+      this.creatingPanes.delete(paneId);
+    }
   }
 
   async close(sessionId: string): Promise<void> {
@@ -78,9 +90,9 @@ export class SessionController {
     this.closing.add(sessionId);
     try {
       await this.adapter.disconnect(sessionId);
+      if (this.sessions.delete(sessionId)) this.publish();
     } finally {
       this.closing.delete(sessionId);
-      if (this.sessions.delete(sessionId)) this.publish();
     }
   }
 
@@ -92,6 +104,13 @@ export class SessionController {
 
   forPane(paneId: string): ManagedSession | undefined {
     return this.snapshot().find((session) => session.paneId === paneId);
+  }
+
+  setForwards(sessionId: string, forwards: ManagedForward[]): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    this.sessions.set(sessionId, { ...session, forwards: [...forwards] });
+    this.publish();
   }
 
   snapshot(): ManagedSession[] {

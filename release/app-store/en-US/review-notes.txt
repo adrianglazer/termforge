@@ -1,0 +1,13 @@
+Termforge is an iPhone SSH/SFTP client for user-managed servers. There is no Termforge account, developer backend, subscription or automatic charge. Remote functions require a reachable SSH server and a valid trial or lifetime entitlement.
+
+Review workflow:
+1. Open app access and choose Start 7-day Trial. Confirm the free non-consumable trial in Apple's purchase sheet. The seven-day period starts only after a verified acquisition; cancellation or a pending transaction grants no new access.
+2. Use Add server to configure a server you are authorized to access, or use the disposable review-host details supplied separately in the private App Review information. Review and independently verify its host fingerprint before connecting. Password and Ed25519 authentication are supported. Device authentication may be requested for protected keys.
+3. Open a terminal and run a harmless command such as pwd or uname -a. Create a workspace with two independent terminal panes and switch between them. Saved layouts are local; backgrounding or idle lock intentionally closes live connections.
+4. Open Files to browse SFTP. Upload/download only a disposable test file; open a small UTF-8 file, edit it, save and verify the result. Do not test destructive operations against production files.
+5. In app access, choose Buy Lifetime and confirm the one-time non-consumable purchase. Restore Purchases uses Apple's explicit restore flow and the same Apple Account. No direct card or Apple Account form exists in Termforge.
+6. The trial lasts exactly 168 hours from the original verified acquisition. Restoring or reinstalling does not restart it. At expiry, SSH, reconnects, command snippets, SFTP operations, forwarding and bastion connections stop. Local hosts, keys, settings and recovery/export/delete controls remain available, subject to device authentication. Interrupted transfers may be partial; disconnecting does not guarantee termination of remote processes.
+
+Expiration and revocation evidence can be supplied from a compatible StoreKit test build. The production app contains no review bypass or editable trial clock. We do not ask reviewers to wait seven days or alter their device clock.
+
+Review support: Adrian Krzysztof Glazer, adrian.glazer@gmail.com. Any required disposable host, account, password/key and verified fingerprint must be supplied through the private review fields, not public metadata. No personal server credentials are included in this package.

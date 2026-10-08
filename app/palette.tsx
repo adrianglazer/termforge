@@ -36,7 +36,11 @@ export default function PaletteScreen() {
   const matching = <T extends { name: string }>(items: T[]) =>
     items.filter((item) => !matches || item.name.toLowerCase().includes(matches));
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title="Search"
@@ -53,7 +57,7 @@ export default function PaletteScreen() {
         style={[styles.input, { borderColor: theme.muted, color: theme.text }]}
       />
       {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
         <Section
           title="Servers"
           items={matching(servers)}
@@ -104,8 +108,8 @@ export default function PaletteScreen() {
             </Pressable>
           )}
         />
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 function Section<T extends { id: string; name: string }>({

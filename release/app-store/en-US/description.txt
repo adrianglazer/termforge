@@ -1,0 +1,25 @@
+Your remote workstation. On your iPhone.
+
+Termforge brings SSH terminals, split-pane workspaces and SFTP file tools together so you can work with your own remote servers from your phone.
+
+WORK WITH YOUR SERVER TOOLS
+Connect to an SSH server, run commands and use interactive terminal tools already installed on that host. Keep independent sessions in a split-pane workspace. Saved layouts help you organize your next session; they do not keep connections running in the background.
+
+KEEP REMOTE FILES CLOSE
+Browse directories, upload and download files with SFTP, and edit small UTF-8 text files. Review changes before saving. Transfers support files up to 256 MiB; the text editor supports files up to 2 MiB.
+
+MAKE IT YOUR WORKSPACE
+Save server profiles and useful command snippets. Choose terminal themes and font sizes, use terminal accessory controls, and configure local or remote TCP forwarding. A single password-authenticated SSH bastion hop can reach a host on a private network.
+
+YOUR CONNECTIONS, YOUR DATA
+Use password or Ed25519 key authentication and review server fingerprints. Private keys are protected by iOS Keychain. App settings and saved layouts stay on your device. No Termforge account, analytics or cloud sync is required. SSH/SFTP sends commands and files to the servers you select.
+
+SEVEN DAYS FREE. THEN PAY ONCE.
+Download the app for free and explicitly start the seven-day full-access trial, or buy the one-time lifetime unlock immediately. There is no subscription and no automatic charge when the trial ends. Apple's purchase screen shows your local price.
+
+Reinstalling or restoring with the same Apple Account does not restart the trial. At expiry, remote work stops, but saved hosts, keys, settings and local recovery/export remain available. Lifetime unlock has no recurring fee and remains valid unless refunded or revoked; it does not promise perpetual OS compatibility. Apple handles purchases and refund requests.
+
+REQUIREMENTS
+An iPhone running iOS 17 or later and an SSH server you are authorized to access. SFTP and remote tools depend on your server. Commands run on the remote host; Termforge does not provide a local Linux environment. Backgrounding or idle lock disconnects sessions. Reconnect when you return.
+
+Questions or feedback? Contact adrian.glazer@gmail.com.

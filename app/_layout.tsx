@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,9 +22,14 @@ export default function RootLayout() {
 /** Keep the access banner and every route inside the device's safe area. */
 function AppViewport() {
   const theme = useTheme();
+  const pathname = usePathname();
   return (
     <SafeAreaView
-      edges={['top', 'left', 'right']}
+      edges={
+        pathname === '/terminal' || pathname === '/servers' || pathname === '/'
+          ? ['top', 'left', 'right']
+          : ['top', 'left', 'right', 'bottom']
+      }
       style={{ flex: 1, backgroundColor: theme.background }}
     >
       <AccessProvider>

@@ -76,6 +76,7 @@ export function HomeTools() {
               ['/known-hosts', 'Known hosts'],
               ['/history', 'Connection history'],
               ['/configuration', 'Import & export'],
+              ['/access', 'Access & purchases'],
             ] as const
           ).map(([route, label]) => (
             <Pressable

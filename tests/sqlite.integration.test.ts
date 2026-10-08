@@ -100,6 +100,39 @@ const key: KeyMetadata = {
 };
 
 describe('real SQLite migrations and repositories', () => {
+  it('removes workspace assignments when deleting a server and protects jump-host dependents', async () => {
+    const { sqlite, database } = await openTemporaryDatabase();
+    const servers = new ServerRepository(database as never);
+    const workspaces = new WorkspaceRepository(database as never);
+    await servers.save({ ...server, authMethod: 'password' });
+    await servers.save({
+      ...server,
+      id: 'dependent',
+      authMethod: 'password',
+      jumpServerId: server.id,
+    });
+    await workspaces.save({
+      id: 'workspace',
+      name: 'Operations',
+      layout: { kind: 'leaf', id: 'pane', serverId: server.id },
+      tabOrder: ['pane'],
+      createdAt: server.createdAt,
+      updatedAt: server.updatedAt,
+    });
+    await expect(servers.remove(server.id)).rejects.toThrow('jump host');
+    expect(await servers.get(server.id)).toBeDefined();
+    expect((await workspaces.list())[0]?.layout).toHaveProperty('serverId', server.id);
+    await servers.remove('dependent');
+    await servers.remove(server.id);
+    expect(await servers.get(server.id)).toBeUndefined();
+    expect((await workspaces.list())[0]?.layout).toEqual({
+      kind: 'leaf',
+      id: 'pane',
+      title: 'New terminal',
+    });
+    sqlite.close();
+  });
+
   it('migrates a persistent database and restores every metadata repository after reopen', async () => {
     const { path, sqlite, database } = await openTemporaryDatabase();
     const servers = new ServerRepository(database as never);

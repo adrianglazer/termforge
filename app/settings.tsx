@@ -7,12 +7,13 @@ import { AccessPanel } from '@/access/AccessPanel';
 import { ScreenShell } from '@/components/ScreenShell';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { SettingsRepository } from '@/settings/repository';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useTheme, useThemeRefresh } from '@/theme/ThemeProvider';
 import { terminalThemes } from '@/theme/tokens';
 import type { Settings } from '@/types/domain';
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const refreshTheme = useThemeRefresh();
   const [settings, setSettings] = useState<Settings>();
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
@@ -34,18 +35,24 @@ export default function SettingsScreen() {
       await new SettingsRepository(db).save(next);
       await TermforgeNative.setAutoLockMinutes(next.autoLockMinutes);
       setSettings(next);
+      await refreshTheme();
+      setError(undefined);
     } catch {
       setError('Settings could not be saved.');
     }
   }
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title="Settings"
         message="Preferences are stored locally. Connection credentials and private keys are never included in exports."
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
         <AccessPanel />
         <Text style={[styles.heading, { color: theme.text }]}>Terminal theme</Text>
         <View style={styles.choices}>
@@ -192,8 +199,8 @@ export default function SettingsScreen() {
           SSH sessions are shown as disconnected after return.
         </Text>
         {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 const styles = StyleSheet.create({
@@ -201,5 +208,5 @@ const styles = StyleSheet.create({
   content: { padding: 24, gap: 14 },
   heading: { fontSize: 17, fontWeight: '700' },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  choice: { borderWidth: 1, borderRadius: 8, padding: 10 },
+  choice: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: 8, padding: 10 },
 });

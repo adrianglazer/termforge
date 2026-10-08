@@ -227,13 +227,15 @@ export class SftpController {
       this.cancelled.delete(id);
       return final;
     } catch (error) {
-      const final = this.cancelled.has(id)
-        ? { ...running, state: 'cancelled' as const }
-        : {
-            ...running,
-            state: 'failed' as const,
-            error: safeError(error).safeMessage,
-          };
+      const failure = safeError(error);
+      const final =
+        this.cancelled.has(id) || failure.code === 'CANCELLED'
+          ? { ...running, state: 'cancelled' as const }
+          : {
+              ...running,
+              state: 'failed' as const,
+              error: failure.safeMessage,
+            };
       this.transfers.set(id, final);
       this.cancelled.delete(id);
       return final;

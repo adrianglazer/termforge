@@ -6,11 +6,15 @@ import { useTheme } from '@/theme/ThemeProvider';
 export default function AccessScreen() {
   const theme = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell compact title="Access" message="Apple purchases. No Termforge account." />
-      <ScrollView contentContainerStyle={{ padding: 24 }}>
+      <View style={{ padding: 24 }}>
         <AccessPanel />
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }

@@ -22,15 +22,19 @@ export default function AccessInfoScreen() {
   const info = information[section === 'privacy' || section === 'support' ? section : 'terms'];
   const theme = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title={info.title}
         message="Purchase information · final legal and contact review pending."
       />
-      <ScrollView contentContainerStyle={{ padding: 24 }}>
+      <View style={{ padding: 24 }}>
         <Text style={{ color: theme.text, lineHeight: 25 }}>{info.text}</Text>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }

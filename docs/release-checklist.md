@@ -12,7 +12,7 @@ The owner reports waiting for distribution; no current status was invented or
 new upload scheduled. Batch monetization with other ready native changes in the
 next consolidated candidate under `tasks/README.md`.
 
-- [ ] Verify existing IAPs/IDs, zero-price non-consumable 7-day Trial, US $14.99
+- [ ] Verify existing IAPs/IDs, zero-price non-consumable 7-day Trial, €14.99 (owner correction)
       lifetime non-consumable/localized prices, Family Sharing off, free app,
       active agreements/tax/banking and In-App Purchase signing capability.
 - [ ] Apple-compile the changed access service/Keychain/inline module and inspect

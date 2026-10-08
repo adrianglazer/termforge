@@ -1,7 +1,8 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ActionButton } from '@/components/ActionButton';
 import { ScreenShell } from '@/components/ScreenShell';
 import { KnownHostRepository } from '@/known-hosts/repository';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
@@ -50,14 +51,18 @@ export default function KnownHostsScreen() {
     );
   }
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         compact
         title="Known hosts"
         message="These saved public identities protect against unexpected server-key changes. Removing one requires a new fingerprint review."
       />
       {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.list}>
+      <View style={styles.list}>
         {hosts.length === 0 ? (
           <Text style={{ color: theme.muted }}>
             No hosts have been saved yet. Choose “Trust and remember” after reviewing a server
@@ -78,13 +83,11 @@ export default function KnownHostsScreen() {
             <Text style={{ color: theme.muted }}>
               Approved {new Date(host.approvedAt).toLocaleString()}
             </Text>
-            <Pressable accessibilityRole="button" onPress={() => remove(host)}>
-              <Text style={{ color: theme.danger }}>Remove trust</Text>
-            </Pressable>
+            <ActionButton onPress={() => remove(host)} label="Remove trust" danger />
           </View>
         ))}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 const styles = StyleSheet.create({

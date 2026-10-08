@@ -6,7 +6,7 @@ import { draftFromServer, emptyServerDraft, serverFromDraft } from '@/servers/mo
 import { normalizeHost } from '@/known-hosts/repository';
 import { validateJumpGraph } from '@/servers/jumpGraph';
 import { nextTransferState } from '@/sftp/transfers';
-import { renderSnippet, snippetVariables } from '@/snippets/template';
+import { renderSnippet, snippetVariables, snippetInput } from '@/snippets/template';
 import { resizeSplit } from '@/workspaces/paneTree';
 import type { Server } from '@/types/domain';
 const server: Server = {
@@ -167,10 +167,19 @@ describe('transfer state', () => {
 });
 
 describe('snippets', () => {
+  it('submits complete commands with Enter, without duplicating a final newline', () => {
+    expect(snippetInput('uptime')).toBe('uptime\r');
+    expect(snippetInput('pwd\nls -la\n')).toBe('pwd\rls -la\r');
+    expect(snippetInput('pwd\r\nls -la')).toBe('pwd\rls -la\r');
+    expect(() => snippetInput('  ')).toThrow('Enter a command');
+  });
   it('extracts variables and requires values when rendering', () => {
     expect(snippetVariables('deploy {{environment}} to {{host}}')).toEqual(['environment', 'host']);
     expect(renderSnippet('echo {{value}}', { value: 'ok' })).toBe('echo ok');
     expect(() => renderSnippet('echo {{value}}', {})).toThrow('value');
+    expect(() => renderSnippet('echo {{value}}', { value: '' })).toThrow('value');
+    expect(() => renderSnippet('echo {{value}}', { value: '   ' })).toThrow('value');
+    expect(renderSnippet('echo {{value}}', { value: '0' })).toBe('echo 0');
   });
 });
 

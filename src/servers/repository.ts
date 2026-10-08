@@ -1,5 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { AppError } from '@/application/errors';
+import { WorkspaceRepository } from '@/workspaces/repository';
+import { leaves } from '@/workspaces/controller';
+import { replacePane } from '@/workspaces/paneTree';
 import type { Server } from '@/types/domain';
 import { validateServer } from '@/validation/domain';
 
@@ -98,6 +102,30 @@ export class ServerRepository {
   }
 
   async remove(id: string): Promise<void> {
-    await this.database.runAsync('DELETE FROM servers WHERE id = ?', id);
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      const dependent = await transaction.getFirstAsync<{ name: string }>(
+        'SELECT name FROM servers WHERE jump_server_id = ? LIMIT 1',
+        id,
+      );
+      if (dependent)
+        throw new AppError(
+          'INVALID_CONFIG',
+          `Change the jump host for ${dependent.name} before deleting this server.`,
+        );
+      const repository = new WorkspaceRepository(transaction);
+      for (const workspace of await repository.list()) {
+        const assigned = leaves(workspace.layout).filter((pane) => pane.serverId === id);
+        if (!assigned.length) continue;
+        let layout = workspace.layout;
+        for (const pane of assigned)
+          layout = replacePane(layout, pane.id, {
+            kind: 'leaf',
+            id: pane.id,
+            title: 'New terminal',
+          });
+        await repository.save({ ...workspace, layout, updatedAt: new Date().toISOString() });
+      }
+      await transaction.runAsync('DELETE FROM servers WHERE id = ?', id);
+    });
   }
 }

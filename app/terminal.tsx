@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -16,8 +16,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ActionButton } from '@/components/ActionButton';
 import { FileActionButton } from '@/components/FileActionButton';
-import { KeyboardToggleIcon } from '@/components/KeyboardToggleIcon';
+import { TerminalToolbar } from '@/components/TerminalToolbar';
+import { terminalThemes } from '@/terminal/themes';
+import { SftpToolbar } from '@/components/SftpToolbar';
+import { SessionToolbar } from '@/components/SessionToolbar';
 import { ScreenShell } from '@/components/ScreenShell';
 import { KeyRepository } from '@/keys/repository';
 import { KnownHostRepository } from '@/known-hosts/repository';
@@ -35,6 +39,7 @@ import {
 } from '@/native/termforgeNative';
 import { ServerRepository } from '@/servers/repository';
 import { SettingsRepository } from '@/settings/repository';
+import { snippetInput } from '@/snippets/template';
 import { sessionManager } from '@/sessions/manager';
 import { joinRemotePath, SftpController, visibleEntries } from '@/sftp/controller';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -58,14 +63,6 @@ const initialForm: Form = {
   jumpPort: '22',
   jumpUsername: '',
 };
-const terminalThemes = [
-  { name: 'Default Dark', foreground: '#e5e7eb', background: '#000000' },
-  { name: 'Default Light', foreground: '#111827', background: '#f9fafb' },
-  { name: 'Solarized Dark', foreground: '#839496', background: '#002b36' },
-  { name: 'Solarized Light', foreground: '#657b83', background: '#fdf6e3' },
-  { name: 'Dracula', foreground: '#f8f8f2', background: '#282a36' },
-  { name: 'Monokai', foreground: '#f8f8f2', background: '#272822' },
-] as const;
 
 export default function TerminalScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(() => Keyboard.isVisible());
@@ -80,9 +77,10 @@ export default function TerminalScreen() {
   const theme = useTheme();
   const safeArea = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { serverId, paneId, snippet } = useLocalSearchParams<{
+  const { serverId, paneId, workspaceId, snippet } = useLocalSearchParams<{
     serverId?: string;
     paneId?: string;
+    workspaceId?: string;
     snippet?: string;
   }>();
   const [form, setForm] = useState(initialForm);
@@ -144,6 +142,9 @@ export default function TerminalScreen() {
   const [searchMatch, setSearchMatch] = useState({ index: 0, total: 0 });
   const [textComposerOpen, setTextComposerOpen] = useState(false);
   const [textComposer, setTextComposer] = useState('');
+  const [snippetReady, setSnippetReady] = useState(false);
+  const [sendingComposer, setSendingComposer] = useState(false);
+  const composerSending = useRef(false);
   const [fontSize, setFontSize] = useState(14);
   const [scrollback, setScrollback] = useState(10_000);
   const [accessoryPreset, setAccessoryPreset] = useState<'compact' | 'extended'>('extended');
@@ -253,6 +254,7 @@ export default function TerminalScreen() {
   useEffect(() => {
     if (!snippet) return;
     setTextComposer(snippet);
+    setSnippetReady(true);
     setTextComposerOpen(true);
   }, [snippet]);
 
@@ -295,11 +297,66 @@ export default function TerminalScreen() {
   }, []);
 
   useEffect(() => {
+    if (!paneId || !serverId) return;
+    const existing = sessionManager.forPane(paneId);
+    if (!existing || existing.serverId !== serverId) return;
+    currentSessionId.current = existing.sessionId;
+    terminalShown.current = true;
+    setSessionId(existing.sessionId);
+    setState(existing.state);
+    setForwards(existing.forwards ?? []);
+    setShowTerminal(true);
+  }, [paneId, serverId]);
+
+  useEffect(() => {
+    if (sessionId && paneId) sessionManager.setForwards(sessionId, forwards);
+  }, [sessionId, paneId, forwards]);
+
+  useEffect(() => {
+    if (!sessionId || !error) return;
+    const timer = setTimeout(() => {
+      setError(undefined);
+      setRetryTransfer(undefined);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [sessionId, error]);
+
+  function reportOperationError(caught: unknown) {
+    const failure = safeError(caught);
+    if (failure.code !== 'CANCELLED') setError(failure.safeMessage);
+  }
+
+  useEffect(() => {
     const subscription = TermforgeNative.addListener('onTransferProgress', (event) => {
-      if (event.sessionId === sessionId) setTransfer(event);
+      if (
+        event.sessionId === sessionId &&
+        sftp.current.snapshot(event.operationId)?.state === 'running'
+      )
+        setTransfer(event);
     });
     return () => subscription.remove();
   }, [sessionId]);
+
+  async function sendComposer() {
+    if (!sessionId || state !== 'ready' || !textComposer.trim() || composerSending.current) return;
+    composerSending.current = true;
+    setSendingComposer(true);
+    try {
+      await TermforgeNative.sendText(
+        sessionId,
+        snippetReady ? snippetInput(textComposer) : textComposer,
+      );
+      setTextComposer('');
+      setTextComposerOpen(false);
+      setSnippetReady(false);
+      setError(undefined);
+    } catch (caught) {
+      setError(safeError(caught).safeMessage);
+    } finally {
+      composerSending.current = false;
+      setSendingComposer(false);
+    }
+  }
 
   async function inspect() {
     if (inspecting.current) return;
@@ -458,6 +515,11 @@ export default function TerminalScreen() {
       setShowTerminal(false);
       setSessionId(id);
       setHistoryStartedAt(startedAt);
+      setForwards([]);
+      setShowFiles(false);
+      setEntries([]);
+      setTransfer(undefined);
+      setRetryTransfer(undefined);
       if (form.useJump && jumpHostKey) {
         await TermforgeNative.connectPasswordViaJump(
           id,
@@ -561,11 +623,17 @@ export default function TerminalScreen() {
 
   async function download(name: string) {
     if (!sessionId) return;
+    setError(undefined);
+    setRetryTransfer(undefined);
     try {
       const result = await sftp.current.download(sessionId, joinRemotePath(remotePath, name));
-      if (result.state !== 'completed' || !result.localURL)
-        throw new Error(result.error ?? 'Download interrupted.');
-      setTransfer(undefined);
+      setTransfer((current) => (current?.operationId === result.id ? undefined : current));
+      if (result.state === 'cancelled') return;
+      if (result.state !== 'completed' || !result.localURL) {
+        setRetryTransfer(() => () => void download(name));
+        setError(result.error ?? 'Download interrupted.');
+        return;
+      }
       Alert.alert(
         'Download complete',
         `${result.bytes} bytes\nSHA-256: ${result.sha256}\n\nThe download is in temporary app storage until you save it to Files.`,
@@ -581,15 +649,16 @@ export default function TerminalScreen() {
             text: 'Save to Files',
             onPress: () => {
               void TermforgeNative.saveFileToFiles(result.localURL!).catch((caught: unknown) =>
-                setError(safeError(caught).safeMessage),
+                reportOperationError(caught),
               );
             },
           },
         ],
       );
     } catch (caught) {
+      if (safeError(caught).code === 'CANCELLED') return;
       setRetryTransfer(() => () => void download(name));
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
     }
   }
 
@@ -612,7 +681,7 @@ export default function TerminalScreen() {
     try {
       setEditor(await sftp.current.openEditor(sessionId, joinRemotePath(remotePath, entry.name)));
     } catch (caught) {
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
     }
   }
   async function renameRemote(entry: RemoteEntry) {
@@ -626,7 +695,7 @@ export default function TerminalScreen() {
       setRenameValue('');
       await refreshFiles();
     } catch (caught) {
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
     }
   }
   function removeRemote(entry: RemoteEntry) {
@@ -645,7 +714,7 @@ export default function TerminalScreen() {
                 await sftp.current.remove(sessionId, remotePath, entry);
                 await refreshFiles();
               } catch (caught) {
-                setError(safeError(caught).safeMessage);
+                reportOperationError(caught);
               }
             })();
           },
@@ -653,19 +722,28 @@ export default function TerminalScreen() {
       ],
     );
   }
-  async function createDirectory() {
+  async function createDirectory(): Promise<boolean> {
     if (!sessionId || !directoryName.trim() || directoryName.includes('/')) {
       setError('Enter one directory name without a slash.');
-      return;
+      return false;
     }
     try {
       await sftp.current.createDirectory(sessionId, remotePath, directoryName);
       setDirectoryName('');
       await refreshFiles();
+      return true;
     } catch (caught) {
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
+      return false;
     }
   }
+  function discardEditor() {
+    Alert.alert('Discard file edits?', 'Unsaved changes to this file will be lost.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => setEditor(undefined) },
+    ]);
+  }
+
   async function saveEditor() {
     if (!sessionId || !editor) return;
     try {
@@ -673,7 +751,7 @@ export default function TerminalScreen() {
       setEditor(undefined);
       await refreshFiles();
     } catch (caught) {
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
     }
   }
 
@@ -681,6 +759,8 @@ export default function TerminalScreen() {
 
   async function upload() {
     if (!sessionId) return;
+    setError(undefined);
+    setRetryTransfer(undefined);
     try {
       const asset = await TermforgeNative.pickLocalFile('upload');
       const uploaded = await sftp.current.upload(
@@ -688,13 +768,19 @@ export default function TerminalScreen() {
         asset.handle,
         joinRemotePath(remotePath, asset.name),
       );
-      if (uploaded.state !== 'completed') throw new Error(uploaded.error ?? 'Upload interrupted.');
-      setTransfer(undefined);
+      setTransfer((current) => (current?.operationId === uploaded.id ? undefined : current));
+      if (uploaded.state === 'cancelled') return;
+      if (uploaded.state !== 'completed') {
+        setRetryTransfer(() => () => void upload());
+        setError(uploaded.error ?? 'Upload interrupted.');
+        return;
+      }
       await refreshFiles();
       Alert.alert('Upload complete', `${uploaded.bytes} bytes\nSHA-256: ${uploaded.sha256}`);
     } catch (caught) {
+      if (safeError(caught).code === 'CANCELLED') return;
       setRetryTransfer(() => () => void upload());
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
     }
   }
 
@@ -778,7 +864,7 @@ export default function TerminalScreen() {
       ]);
       setError(undefined);
     } catch (caught) {
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
     }
   }
 
@@ -788,7 +874,7 @@ export default function TerminalScreen() {
       await TermforgeNative.stopForward(sessionId, forwardId);
       setForwards((current) => current.filter((forward) => forward.id !== forwardId));
     } catch (caught) {
-      setError(safeError(caught).safeMessage);
+      reportOperationError(caught);
     }
   }
 
@@ -840,90 +926,62 @@ export default function TerminalScreen() {
         keyboardVerticalOffset={safeArea.top}
       >
         <View style={styles.statusSafeArea}>
-          <View style={styles.statusBar}>
-            <Text style={styles.statusText}>
-              {form.username}@{form.host} · {state}
-            </Text>
-            <View style={styles.sessionTools}>
-              <Pressable accessibilityRole="button" onPress={() => setShowFiles(false)}>
-                <Text style={showFiles ? styles.toolText : styles.toolActive}>Terminal</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setShowFiles(true);
-                  void refreshFiles();
-                }}
-              >
-                <Text style={showFiles ? styles.toolActive : styles.toolText}>Files</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setForwardOpen((value) => !value)}
-              >
-                <Text style={forwardOpen ? styles.toolActive : styles.toolText}>Forwards</Text>
-              </Pressable>
-            </View>
-            <Pressable accessibilityRole="button" onPress={disconnect}>
-              <Text style={styles.disconnect}>Disconnect</Text>
+          {paneId && showTerminal ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Return to workspace, keeping this connection open"
+              onPress={() => {
+                Keyboard.dismiss();
+                router.dismissTo({
+                  pathname: '/workspaces',
+                  params: workspaceId ? { workspaceId } : {},
+                });
+              }}
+              style={{
+                minHeight: 44,
+                paddingHorizontal: 16,
+                justifyContent: 'center',
+                borderBottomWidth: 1,
+                borderColor: '#374151',
+              }}
+            >
+              <Text style={styles.toolActive}>‹ Workspace</Text>
             </Pressable>
-          </View>
+          ) : null}
+          <SessionToolbar
+            connection={`${form.username}@${form.host} · ${state}`}
+            active={showFiles ? 'Files' : forwardOpen ? 'Forwards' : 'Terminal'}
+            onSelect={(tab) => {
+              setShowFiles(tab === 'Files');
+              setForwardOpen(tab === 'Forwards' ? !forwardOpen : false);
+              if (tab === 'Files') void refreshFiles();
+            }}
+            onDisconnect={() => {
+              void disconnect().catch(reportOperationError);
+            }}
+          />
         </View>
         {showFiles ? (
-          <View style={styles.files}>
-            <TextInput
-              value={pathInput}
-              onChangeText={setPathInput}
-              onSubmitEditing={() => void refreshFiles(pathInput)}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.pathInput}
+          <View
+            style={[
+              styles.files,
+              { paddingBottom: keyboardVisible ? 12 : Math.max(safeArea.bottom, 12) },
+            ]}
+          >
+            <SftpToolbar
+              path={pathInput}
+              onPath={setPathInput}
+              remotePath={remotePath}
+              onBrowse={(path) => void refreshFiles(path)}
+              search={fileSearch}
+              onSearch={setFileSearch}
+              sort={fileSort}
+              onSort={() => setFileSort((current) => (current === 'name' ? 'size' : 'name'))}
+              onUpload={() => void upload()}
+              directoryName={directoryName}
+              onDirectoryName={setDirectoryName}
+              onCreate={createDirectory}
             />
-            <TextInput
-              value={fileSearch}
-              onChangeText={setFileSearch}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="Search this directory"
-              placeholderTextColor="#6b7280"
-              style={styles.pathInput}
-            />
-            <View style={styles.fileActions}>
-              <Pressable
-                onPress={() => {
-                  const parent =
-                    remotePath === '/' ? '/' : remotePath.replace(/\/[^/]+\/?$/, '') || '/';
-                  void refreshFiles(parent);
-                }}
-              >
-                <Text style={styles.toolActive}>Up</Text>
-              </Pressable>
-              <Pressable onPress={() => void refreshFiles(pathInput)}>
-                <Text style={styles.toolActive}>Refresh</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setFileSort((current) => (current === 'name' ? 'size' : 'name'))}
-              >
-                <Text style={styles.toolActive}>Sort: {fileSort}</Text>
-              </Pressable>
-              <Pressable onPress={upload}>
-                <Text style={styles.toolActive}>Upload</Text>
-              </Pressable>
-            </View>
-            <View style={styles.renameBar}>
-              <TextInput
-                value={directoryName}
-                onChangeText={setDirectoryName}
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="New directory"
-                placeholderTextColor="#6b7280"
-                style={styles.forwardInput}
-              />
-              <Pressable onPress={() => void createDirectory()}>
-                <Text style={styles.toolActive}>Create directory</Text>
-              </Pressable>
-            </View>
             {transfer ? (
               <View style={styles.transferRow}>
                 <Text style={styles.fileMeta}>
@@ -933,7 +991,13 @@ export default function TerminalScreen() {
                   onPress={() =>
                     void sftp.current
                       .cancel(transfer.operationId)
-                      .then(() => setTransfer(undefined))
+                      .then(() => {
+                        setTransfer((current) =>
+                          current?.operationId === transfer.operationId ? undefined : current,
+                        );
+                        setError(undefined);
+                        setRetryTransfer(undefined);
+                      })
                       .catch(() => setError('The transfer could not be cancelled.'))
                   }
                 >
@@ -952,10 +1016,18 @@ export default function TerminalScreen() {
                   placeholderTextColor="#6b7280"
                   style={styles.forwardInput}
                 />
-                <Pressable onPress={() => void renameRemote(renameEntry)}>
+                <Pressable
+                  style={styles.terminalAction}
+                  accessibilityRole="button"
+                  onPress={() => void renameRemote(renameEntry)}
+                >
                   <Text style={styles.toolActive}>Rename</Text>
                 </Pressable>
-                <Pressable onPress={() => setRenameEntry(undefined)}>
+                <Pressable
+                  style={styles.terminalAction}
+                  accessibilityRole="button"
+                  onPress={() => setRenameEntry(undefined)}
+                >
                   <Text style={styles.disconnect}>Cancel</Text>
                 </Pressable>
               </View>
@@ -971,7 +1043,11 @@ export default function TerminalScreen() {
               ) : null}
               {filteredEntries.map((entry) => (
                 <View key={entry.name} style={styles.fileRow}>
-                  <Pressable onPress={() => openEntry(entry)} style={styles.fileMain}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => openEntry(entry)}
+                    style={styles.fileMain}
+                  >
                     <Text style={styles.fileName}>
                       {entry.isDirectory ? '▸ ' : ''}
                       {entry.name}
@@ -1026,10 +1102,18 @@ export default function TerminalScreen() {
                   placeholderTextColor="#6b7280"
                   style={styles.searchInput}
                 />
-                <Pressable onPress={() => void search('previous')}>
+                <Pressable
+                  style={styles.terminalAction}
+                  accessibilityRole="button"
+                  onPress={() => void search('previous')}
+                >
                   <Text style={styles.toolActive}>↑</Text>
                 </Pressable>
-                <Pressable onPress={() => void search('next')}>
+                <Pressable
+                  style={styles.terminalAction}
+                  accessibilityRole="button"
+                  onPress={() => void search('next')}
+                >
                   <Text style={styles.toolActive}>↓</Text>
                 </Pressable>
                 <Text style={styles.fileMeta}>
@@ -1049,38 +1133,68 @@ export default function TerminalScreen() {
             ) : null}
             {textComposerOpen ? (
               <View style={styles.composerBar}>
+                {snippetReady ? (
+                  <Text style={styles.toolText}>
+                    Run on {form.username}@{form.host}
+                  </Text>
+                ) : null}
                 <TextInput
+                  accessibilityLabel={snippetReady ? 'Command to run' : 'Terminal text'}
                   value={textComposer}
                   onChangeText={setTextComposer}
+                  editable={!sendingComposer}
+                  multiline
                   autoCapitalize="none"
                   autoCorrect={false}
-                  placeholder="Compose Unicode text"
+                  placeholder={snippetReady ? 'Review command' : 'Compose Unicode text'}
                   placeholderTextColor="#6b7280"
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { flex: 0, minHeight: 48, maxHeight: 140 }]}
                 />
-                <Pressable
-                  disabled={!textComposer}
-                  onPress={() => {
-                    void TermforgeNative.sendText(sessionId, textComposer);
-                    setTextComposer('');
-                  }}
-                >
-                  <Text style={styles.toolActive}>Send</Text>
-                </Pressable>
-                <Pressable onPress={() => setTextComposerOpen(false)}>
-                  <Text style={styles.disconnect}>Close</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={!textComposer.trim() || state !== 'ready' || sendingComposer}
+                    style={[
+                      styles.composerButton,
+                      {
+                        opacity:
+                          !textComposer.trim() || state !== 'ready' || sendingComposer ? 0.4 : 1,
+                      },
+                    ]}
+                    onPress={() => void sendComposer()}
+                  >
+                    <Text style={styles.toolActive}>
+                      {sendingComposer ? 'Sending…' : snippetReady ? 'Run command' : 'Send text'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={sendingComposer}
+                    style={styles.composerButton}
+                    onPress={() => setTextComposerOpen(false)}
+                  >
+                    <Text style={styles.disconnect}>Close</Text>
+                  </Pressable>
+                </View>
               </View>
             ) : null}
             {forwardOpen ? (
               <View style={styles.forwardPanel}>
                 <View style={styles.forwardKinds}>
-                  <Pressable onPress={() => setForwardKind('local')}>
+                  <Pressable
+                    style={styles.terminalAction}
+                    accessibilityRole="button"
+                    onPress={() => setForwardKind('local')}
+                  >
                     <Text style={forwardKind === 'local' ? styles.toolActive : styles.toolText}>
                       Local
                     </Text>
                   </Pressable>
-                  <Pressable onPress={() => setForwardKind('remote')}>
+                  <Pressable
+                    style={styles.terminalAction}
+                    accessibilityRole="button"
+                    onPress={() => setForwardKind('remote')}
+                  >
                     <Text style={forwardKind === 'remote' ? styles.toolActive : styles.toolText}>
                       Remote
                     </Text>
@@ -1111,7 +1225,11 @@ export default function TerminalScreen() {
                   placeholderTextColor="#6b7280"
                   style={styles.forwardInput}
                 />
-                <Pressable onPress={() => void startForward()}>
+                <Pressable
+                  style={styles.terminalAction}
+                  accessibilityRole="button"
+                  onPress={() => void startForward()}
+                >
                   <Text style={styles.toolActive}>Start {forwardKind} forward</Text>
                 </Pressable>
                 <Text style={styles.forwardHint}>
@@ -1123,7 +1241,11 @@ export default function TerminalScreen() {
                     <Text style={styles.statusText}>
                       {forward.kind}: {forward.summary}
                     </Text>
-                    <Pressable onPress={() => void stopForward(forward.id)}>
+                    <Pressable
+                      style={styles.terminalAction}
+                      accessibilityRole="button"
+                      onPress={() => void stopForward(forward.id)}
+                    >
                       <Text style={styles.disconnect}>Stop</Text>
                     </Pressable>
                   </View>
@@ -1138,112 +1260,27 @@ export default function TerminalScreen() {
               foregroundColor={terminalTheme.foreground}
               backgroundColor={terminalTheme.background}
             />
-            <View style={styles.keyboardToolbar}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={keyboardVisible ? 'Hide keyboard' : 'Show keyboard'}
-                accessibilityHint="Hiding the keyboard keeps your terminal session connected."
-                style={styles.keyboardToggle}
-                onPress={() => {
-                  if (keyboardVisible) Keyboard.dismiss();
-                  void TermforgeNative.setKeyboardVisible(sessionId, !keyboardVisible).catch(
-                    (caught: unknown) => setError(safeError(caught).safeMessage),
-                  );
-                }}
-              >
-                <KeyboardToggleIcon visible={keyboardVisible} />
-              </Pressable>
-              <ScrollView
-                horizontal
-                keyboardShouldPersistTaps="always"
-                style={styles.keyBar}
-                contentContainerStyle={styles.keyBarContent}
-              >
-                {(
-                  [
-                    ['Esc', 'escape'],
-                    ['Tab', 'tab'],
-                    ['Ctrl-C', 'ctrlC'],
-                    ['Ctrl-D', 'ctrlD'],
-                    ['←', 'left'],
-                    ['↑', 'up'],
-                    ['↓', 'down'],
-                    ['→', 'right'],
-                    ['F1', 'f1'],
-                    ['F2', 'f2'],
-                    ['F3', 'f3'],
-                    ['F4', 'f4'],
-                    ['F5', 'f5'],
-                    ['F6', 'f6'],
-                    ['F7', 'f7'],
-                    ['F8', 'f8'],
-                    ['F9', 'f9'],
-                    ['F10', 'f10'],
-                    ['F11', 'f11'],
-                    ['F12', 'f12'],
-                  ] as const
-                )
-                  .filter(([, key]) => accessoryPreset === 'extended' || !key.startsWith('f'))
-                  .map(([label, key]) => (
-                    <Pressable
-                      key={key}
-                      onPress={() => void TermforgeNative.sendKey(sessionId, key)}
-                      style={styles.keyButton}
-                    >
-                      <Text style={styles.keyText}>{label}</Text>
-                    </Pressable>
-                  ))}
-                <Pressable onPress={() => setSearchOpen(true)} style={styles.keyButton}>
-                  <Text style={styles.keyText}>Find</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setTextComposerOpen((value) => !value)}
-                  style={styles.keyButton}
-                >
-                  <Text style={styles.keyText}>Unicode</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void TermforgeNative.pasteClipboard(sessionId)}
-                  style={styles.keyButton}
-                >
-                  <Text style={styles.keyText}>Paste</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() =>
-                    void TermforgeNative.shareClipboard().catch((caught: unknown) =>
-                      setError(safeError(caught).safeMessage),
-                    )
-                  }
-                  style={styles.keyButton}
-                >
-                  <Text style={styles.keyText}>Share</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void TermforgeNative.clearScrollback(sessionId)}
-                  style={styles.keyButton}
-                >
-                  <Text style={styles.keyText}>Clear history</Text>
-                </Pressable>
-                <Pressable onPress={() => changeFontSize(-1)} style={styles.keyButton}>
-                  <Text style={styles.keyText}>A−</Text>
-                </Pressable>
-                <Pressable onPress={() => changeFontSize(1)} style={styles.keyButton}>
-                  <Text style={styles.keyText}>A+</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() =>
-                    setTerminalThemeIndex((value) => (value + 1) % terminalThemes.length)
-                  }
-                  style={styles.keyButton}
-                >
-                  <Text style={styles.keyText}>{terminalTheme.name}</Text>
-                </Pressable>
-              </ScrollView>
-            </View>
+            <TerminalToolbar
+              sessionId={sessionId}
+              keyboardVisible={keyboardVisible}
+              bottomInset={Math.max(safeArea.bottom, 12) + 4}
+              preset={accessoryPreset}
+              onFind={() => setSearchOpen(true)}
+              onCompose={() => setTextComposerOpen((value) => !value)}
+              onFont={changeFontSize}
+              themeName={terminalTheme.name}
+              onTheme={() => setTerminalThemeIndex((value) => (value + 1) % terminalThemes.length)}
+              onError={reportOperationError}
+            />
           </>
         )}
         {editor ? (
-          <View style={styles.editorOverlay}>
+          <View
+            style={[
+              styles.editorOverlay,
+              { paddingBottom: keyboardVisible ? 12 : Math.max(safeArea.bottom, 12) },
+            ]}
+          >
             <Text style={styles.statusText}>{editor.path} · unsaved</Text>
             <View style={styles.editorFind}>
               <TextInput
@@ -1301,7 +1338,7 @@ export default function TerminalScreen() {
                 accessibilityRole="button"
                 onPress={() =>
                   void TermforgeNative.copyText(editor.text).catch((caught: unknown) =>
-                    setError(safeError(caught).safeMessage),
+                    reportOperationError(caught),
                   )
                 }
               >
@@ -1311,13 +1348,17 @@ export default function TerminalScreen() {
                 accessibilityRole="button"
                 onPress={() =>
                   void TermforgeNative.saveTextDraftToFiles(editor.text).catch((caught: unknown) =>
-                    setError(safeError(caught).safeMessage),
+                    reportOperationError(caught),
                   )
                 }
               >
                 <Text style={styles.toolActive}>Save draft to Files</Text>
               </Pressable>
-              <Pressable onPress={() => setEditor(undefined)}>
+              <Pressable
+                style={styles.terminalAction}
+                accessibilityRole="button"
+                onPress={discardEditor}
+              >
                 <Text style={styles.disconnect}>Discard</Text>
               </Pressable>
             </View>
@@ -1326,6 +1367,17 @@ export default function TerminalScreen() {
         {error ? (
           <View style={styles.errorRow}>
             <Text style={styles.error}>{error}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss message"
+              style={styles.terminalAction}
+              onPress={() => {
+                setError(undefined);
+                setRetryTransfer(undefined);
+              }}
+            >
+              <Text style={styles.toolText}>×</Text>
+            </Pressable>
             {retryTransfer ? (
               <Pressable
                 accessibilityRole="button"
@@ -1342,9 +1394,10 @@ export default function TerminalScreen() {
           </View>
         ) : null}
         {!showTerminal ? (
-          <View
+          <ScrollView
             style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]}
             accessibilityViewIsModal
+            keyboardShouldPersistTaps="handled"
           >
             <ScreenShell
               title="Connecting"
@@ -1362,24 +1415,50 @@ export default function TerminalScreen() {
                 <Text style={{ color: theme.accent, textAlign: 'center' }}>Cancel connection</Text>
               </Pressable>
             </View>
-          </View>
+          </ScrollView>
         ) : null}
       </KeyboardAvoidingView>
     );
   }
 
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={[styles.page, { backgroundColor: theme.background }]}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       <ScreenShell
         title="Connect"
         message="Inspect and approve the server identity before your password is used."
         compact
       />
-      <ScrollView
-        contentContainerStyle={styles.formContent}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-      >
+      <View style={styles.formContent}>
+        {editor ? (
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <Text style={{ color: theme.text }}>Unsaved file: {editor.path}</Text>
+            <Text style={{ color: theme.muted }}>
+              The connection ended. Save a local copy of your edits before leaving this screen.
+            </Text>
+            <ActionButton
+              label="Save draft to Files"
+              onPress={() => {
+                void TermforgeNative.saveTextDraftToFiles(editor.text).catch((caught: unknown) =>
+                  reportOperationError(caught),
+                );
+              }}
+            />
+            <ActionButton
+              label="Copy draft"
+              onPress={() => {
+                void TermforgeNative.copyText(editor.text).catch((caught: unknown) =>
+                  reportOperationError(caught),
+                );
+              }}
+            />
+            <ActionButton label="Discard draft" danger onPress={discardEditor} />
+          </View>
+        ) : null}
+
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
           <Field
             label="Host"
@@ -1502,8 +1581,8 @@ export default function TerminalScreen() {
           )}
           {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
         </View>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -1568,27 +1647,12 @@ const styles = StyleSheet.create({
   terminalPage: { flex: 1, backgroundColor: '#000' },
   terminal: { flex: 1 },
   statusSafeArea: { backgroundColor: '#000' },
-  statusBar: {
-    minHeight: 44,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#374151',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
   statusText: { color: '#e5e7eb', fontSize: 12, flexShrink: 1, minWidth: 0 },
-  sessionTools: {
-    flexDirection: 'row',
-    gap: 12,
-    marginLeft: 'auto',
-  },
   toolText: { color: '#d1d5db', fontSize: 12 },
   toolActive: { color: '#5eead4', fontWeight: '600', fontSize: 12 },
-  files: { flex: 1, backgroundColor: '#030712', padding: 12, gap: 10 },
+  files: { flex: 1, backgroundColor: '#030712', padding: 10, gap: 8 },
   forwardPanel: { backgroundColor: '#111827', padding: 10, gap: 8 },
-  forwardKinds: { flexDirection: 'row', gap: 16 },
+  forwardKinds: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   forwardInput: {
     borderWidth: 1,
     borderColor: '#4b5563',
@@ -1634,15 +1698,18 @@ const styles = StyleSheet.create({
   },
   editorActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
   editorFind: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  renameBar: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  pathInput: {
-    borderColor: '#4b5563',
+  renameBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+
+  terminalAction: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
     borderWidth: 1,
+    borderColor: '#4b5563',
     borderRadius: 8,
-    color: '#f9fafb',
-    padding: 10,
   },
-  fileActions: { flexDirection: 'row', gap: 20 },
+  fileActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fileRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1656,27 +1723,6 @@ const styles = StyleSheet.create({
   entryActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   fileName: { color: '#f9fafb', flex: 1 },
   fileMeta: { color: '#9ca3af' },
-  keyboardToolbar: { flexDirection: 'row', alignItems: 'stretch', backgroundColor: '#111827' },
-  keyboardToggle: {
-    width: 44,
-    flexShrink: 0,
-    alignItems: 'center',
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    borderRightWidth: 1,
-    borderRightColor: '#4b5563',
-  },
-  keyBar: { flex: 1, minWidth: 0, backgroundColor: '#111827' },
-  keyBarContent: { gap: 6, paddingHorizontal: 8, paddingVertical: 6 },
-  keyButton: {
-    borderColor: '#4b5563',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  keyText: { color: '#f9fafb' },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1684,9 +1730,15 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#111827',
   },
+  composerButton: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: '#4b5563',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
   composerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
     padding: 8,
     backgroundColor: '#111827',
@@ -1702,6 +1754,6 @@ const styles = StyleSheet.create({
   },
   disconnect: { color: '#fda4af', fontSize: 12 },
   transferRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  error: { color: '#fb7185', padding: 8 },
+  error: { color: '#fb7185', padding: 8, flex: 1 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

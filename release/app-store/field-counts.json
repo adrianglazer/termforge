@@ -1,0 +1,72 @@
+[
+  {
+    "field": "name",
+    "characters": 9,
+    "utf8_bytes": 9,
+    "limit": 30,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "subtitle",
+    "characters": 30,
+    "utf8_bytes": 30,
+    "limit": 30,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "promotional-text",
+    "characters": 158,
+    "utf8_bytes": 158,
+    "limit": 170,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "description",
+    "characters": 2314,
+    "utf8_bytes": 2314,
+    "limit": 4000,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "keywords",
+    "characters": 76,
+    "utf8_bytes": 76,
+    "limit": 100,
+    "limit_unit": "bytes"
+  },
+  {
+    "field": "review-notes",
+    "characters": 2473,
+    "utf8_bytes": 2473,
+    "limit": 4000,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "iap-trial-name",
+    "characters": 11,
+    "utf8_bytes": 11,
+    "limit": 30,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "iap-lifetime-name",
+    "characters": 15,
+    "utf8_bytes": 15,
+    "limit": 30,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "iap-trial-description",
+    "characters": 44,
+    "utf8_bytes": 44,
+    "limit": 45,
+    "limit_unit": "characters"
+  },
+  {
+    "field": "iap-lifetime-description",
+    "characters": 32,
+    "utf8_bytes": 32,
+    "limit": 45,
+    "limit_unit": "characters"
+  }
+]

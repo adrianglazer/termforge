@@ -1,23 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 
+import { WorkspaceTerminals } from '@/components/WorkspaceTerminals';
 import { ScreenShell } from '@/components/ScreenShell';
-import { NativeTerminalView } from '@/native/termforgeNative';
+import { WorkspacePane as Pane } from '@/components/WorkspacePane';
+import { ActionButton as Button } from '@/components/ActionButton';
 import { openMetadataDatabase } from '@/persistence/bootstrap';
 import { ServerRepository } from '@/servers/repository';
 import { sessionManager, type ManagedSession } from '@/sessions/manager';
 import { useTheme } from '@/theme/ThemeProvider';
-import type { PaneLeaf, PaneNode, Workspace } from '@/types/domain';
+import type { PaneLeaf, Workspace } from '@/types/domain';
 import { closePane, findPane, replacePane, resizeSplit, splitPane } from '@/workspaces/paneTree';
 import { duplicateWorkspace as createWorkspaceDuplicate } from '@/workspaces/controller';
 import { WorkspaceRepository } from '@/workspaces/repository';
@@ -27,6 +20,11 @@ const makeId = (kind: string) => `${kind}-${Date.now()}-${Math.random().toString
 
 export default function WorkspacesScreen() {
   const theme = useTheme();
+  const navigation = useNavigation();
+  const [working, setWorking] = useState(false);
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: !working, gestureEnabled: !working });
+  }, [navigation, working]);
   const { workspaceId } = useLocalSearchParams<{ workspaceId?: string }>();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [servers, setServers] = useState<Server[]>([]);
@@ -34,9 +32,9 @@ export default function WorkspacesScreen() {
   const [name, setName] = useState('');
   const [rename, setRename] = useState('');
   const [renaming, setRenaming] = useState(false);
-  const [focusedPaneId, setFocusedPaneId] = useState<string>();
   const [zoomedPaneId, setZoomedPaneId] = useState<string>();
   const [liveSessions, setLiveSessions] = useState<ManagedSession[]>([]);
+  const saving = useRef(false);
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
     try {
@@ -62,14 +60,26 @@ export default function WorkspacesScreen() {
     router.setParams({ workspaceId: undefined });
   }, [workspaceId, workspaces]);
 
-  async function persist(workspace: Workspace) {
+  useEffect(() => {
+    setZoomedPaneId(undefined);
+    setRenaming(false);
+  }, [active?.id]);
+
+  async function persist(workspace: Workspace): Promise<boolean> {
+    if (saving.current) return false;
+    saving.current = true;
+    setError(undefined);
     try {
       const db = await openMetadataDatabase();
       await new WorkspaceRepository(db).save(workspace);
       setActive(workspace);
       await load();
+      return true;
     } catch {
       setError('This workspace layout could not be saved.');
+      return false;
+    } finally {
+      saving.current = false;
     }
   }
   async function create() {
@@ -79,8 +89,8 @@ export default function WorkspacesScreen() {
       return;
     }
     const now = new Date().toISOString();
-    const leaf: PaneLeaf = { kind: 'leaf', id: makeId('pane'), title: 'Disconnected terminal' };
-    await persist({
+    const leaf: PaneLeaf = { kind: 'leaf', id: makeId('pane'), title: 'New terminal' };
+    const saved = await persist({
       id: makeId('workspace'),
       name: trimmed,
       layout: leaf,
@@ -88,15 +98,16 @@ export default function WorkspacesScreen() {
       createdAt: now,
       updatedAt: now,
     });
-    setName('');
+    if (saved) setName('');
   }
   function split(targetId: string, axis: 'row' | 'column') {
     if (!active) return;
+    setZoomedPaneId(undefined);
     try {
       const newLeaf: PaneLeaf = {
         kind: 'leaf',
         id: makeId('pane'),
-        title: 'Disconnected terminal',
+        title: 'New terminal',
       };
       void persist({
         ...active,
@@ -108,14 +119,22 @@ export default function WorkspacesScreen() {
       setError(caught instanceof Error ? caught.message : 'The pane could not be split.');
     }
   }
-  function removePane(targetId: string) {
+  async function removePane(targetId: string) {
     if (!active) return;
     const layout = closePane(active.layout, targetId);
     if (!layout) {
       setError('A workspace must keep one pane. Delete the workspace instead.');
       return;
     }
-    void persist({
+    try {
+      const session = sessionManager.forPane(targetId);
+      if (session) await sessionManager.close(session.sessionId);
+    } catch {
+      setError('The pane could not be disconnected.');
+      return;
+    }
+    setZoomedPaneId(undefined);
+    await persist({
       ...active,
       layout,
       tabOrder: active.tabOrder.filter((id) => id !== targetId),
@@ -163,7 +182,7 @@ export default function WorkspacesScreen() {
   function removeWorkspace(workspace: Workspace) {
     Alert.alert(
       'Delete workspace?',
-      `${workspace.name} and its disconnected layout will be removed.`,
+      `${workspace.name} will be removed and its connected terminals will be disconnected.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -172,6 +191,12 @@ export default function WorkspacesScreen() {
           onPress: () => {
             void (async () => {
               try {
+                await Promise.all(
+                  sessionManager
+                    .snapshot()
+                    .filter((session) => findPane(workspace.layout, session.paneId))
+                    .map((session) => sessionManager.close(session.sessionId)),
+                );
                 const db = await openMetadataDatabase();
                 await new WorkspaceRepository(db).remove(workspace.id);
                 await load();
@@ -189,316 +214,170 @@ export default function WorkspacesScreen() {
       setError('Give the workspace a name.');
       return;
     }
-    await persist({ ...active, name: rename.trim(), updatedAt: new Date().toISOString() });
-    setRenaming(false);
+    if (await persist({ ...active, name: rename.trim(), updatedAt: new Date().toISOString() }))
+      setRenaming(false);
   }
   async function duplicateWorkspace() {
     if (!active) return;
     const now = new Date().toISOString();
     await persist(createWorkspaceDuplicate(active, makeId, now));
   }
+  if (working && active)
+    return (
+      <WorkspaceTerminals
+        key={active.id}
+        workspace={active}
+        servers={servers}
+        sessions={liveSessions}
+        initialExpanded={zoomedPaneId}
+        onLayout={() => {
+          setWorking(false);
+          setZoomedPaneId(undefined);
+        }}
+      />
+    );
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={{ paddingBottom: 32 }}
+      keyboardShouldPersistTaps="handled"
+    >
       <ScreenShell
         compact
         title="Workspaces"
-        message="Layouts restore disconnected after relaunch. Reconnect opens fresh native sessions; no remote session is implied to survive."
+        message="Arrange your panes here, then tap Open terminals to use them together. In the terminal screen, tap a pane to type and use its arrow to expand or restore the split. Connections close in the background."
       />
-      <View style={styles.create}>
+      <View style={styles.content}>
         <TextInput
           value={name}
           onChangeText={setName}
           placeholder="New workspace name"
           placeholderTextColor={theme.muted}
+          accessibilityLabel="New workspace name"
           style={[styles.input, { borderColor: theme.muted, color: theme.text }]}
         />
-        <Pressable accessibilityRole="button" onPress={() => void create()}>
-          <Text style={{ color: theme.accent }}>Create</Text>
-        </Pressable>
-      </View>
-      {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-      <ScrollView horizontal contentContainerStyle={styles.tabs}>
-        {workspaces.map((workspace) => (
-          <Pressable
-            key={workspace.id}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: workspace.id === active?.id }}
-            onPress={() => setActive(workspace)}
-            style={[
-              styles.tab,
-              { borderColor: workspace.id === active?.id ? theme.accent : theme.muted },
-            ]}
-          >
-            <Text style={{ color: workspace.id === active?.id ? theme.accent : theme.text }}>
-              {workspace.name}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      {active ? (
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.workspaceHeader}>
+        <Button label="Create workspace" onPress={() => void create()} />
+        {error ? (
+          <Text accessibilityRole="alert" style={{ color: theme.danger }}>
+            {error}
+          </Text>
+        ) : null}
+        <ScrollView
+          horizontal
+          style={{ flexGrow: 0, flexShrink: 0 }}
+          contentContainerStyle={styles.tabs}
+        >
+          {workspaces.map((workspace) => (
+            <Pressable
+              key={workspace.id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: workspace.id === active?.id }}
+              onPress={() => setActive(workspace)}
+              style={[
+                styles.tab,
+                { borderColor: workspace.id === active?.id ? theme.accent : theme.muted },
+              ]}
+            >
+              <Text
+                style={{
+                  color: workspace.id === active?.id ? theme.accent : theme.text,
+                  fontWeight: '600',
+                }}
+              >
+                {workspace.name}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {active ? (
+          <>
             {renaming ? (
               <TextInput
                 value={rename}
                 onChangeText={setRename}
                 autoFocus
-                style={[styles.renameInput, { borderColor: theme.muted, color: theme.text }]}
+                accessibilityLabel="Workspace name"
+                style={[styles.input, { borderColor: theme.muted, color: theme.text }]}
               />
             ) : (
               <Text style={[styles.title, { color: theme.text }]}>{active.name}</Text>
             )}
-            <View style={styles.workspaceActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  if (renaming) void saveRename();
-                  else {
-                    setRename(active.name);
-                    setRenaming(true);
+            <View style={styles.actions}>
+              {renaming ? (
+                <>
+                  <Button label="Save name" onPress={() => void saveRename()} />
+                  <Button label="Cancel" onPress={() => setRenaming(false)} />
+                </>
+              ) : (
+                <Button
+                  label="Workspace options…"
+                  onPress={() =>
+                    Alert.alert(active.name, 'Manage workspace', [
+                      {
+                        text: 'Rename',
+                        onPress: () => {
+                          setRename(active.name);
+                          setRenaming(true);
+                        },
+                      },
+                      { text: 'Duplicate', onPress: () => void duplicateWorkspace() },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: () => removeWorkspace(active),
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ])
                   }
-                }}
-              >
-                <Text style={{ color: theme.accent }}>{renaming ? 'Save' : 'Rename'}</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => void duplicateWorkspace()}>
-                <Text style={{ color: theme.accent }}>Duplicate</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => removeWorkspace(active)}>
-                <Text style={{ color: theme.danger }}>Delete</Text>
-              </Pressable>
+                />
+              )}
             </View>
-          </View>
-          {zoomedPaneId && findPane(active.layout, zoomedPaneId) ? (
-            <>
-              <Pressable accessibilityRole="button" onPress={() => setZoomedPaneId(undefined)}>
-                <Text style={{ color: theme.accent }}>Restore layout</Text>
-              </Pressable>
-              <Pane
-                node={findPane(active.layout, zoomedPaneId)!}
-                onSplit={split}
-                onClose={removePane}
-                onFocus={setFocusedPaneId}
-                onZoom={setZoomedPaneId}
-                onResize={resize}
-                onAssign={assignServer}
-                servers={servers}
-                focusedPaneId={focusedPaneId}
-                liveSessions={liveSessions}
-                onDisconnect={closePaneSession}
-              />
-            </>
-          ) : (
+            <Button
+              label="Open terminals"
+              onPress={() => {
+                setZoomedPaneId(undefined);
+                setWorking(true);
+              }}
+            />
             <Pane
+              key={active.id}
+              workspaceId={active.id}
               node={active.layout}
               onSplit={split}
-              onClose={removePane}
-              onFocus={setFocusedPaneId}
-              onZoom={setZoomedPaneId}
+              onClose={(id) => void removePane(id)}
+              onZoom={(id) => {
+                setZoomedPaneId(id);
+                setWorking(true);
+              }}
               onResize={resize}
               onAssign={assignServer}
               servers={servers}
-              focusedPaneId={focusedPaneId}
               liveSessions={liveSessions}
               onDisconnect={closePaneSession}
             />
-          )}
-        </ScrollView>
-      ) : (
-        <Text style={[styles.empty, { color: theme.muted }]}>
-          Create a workspace to arrange terminal panes.
-        </Text>
-      )}
-    </View>
-  );
-}
-function Pane({
-  node,
-  onSplit,
-  onClose,
-  onFocus,
-  onZoom,
-  onResize,
-  onAssign,
-  servers,
-  focusedPaneId,
-  liveSessions,
-  onDisconnect,
-}: {
-  node: PaneNode;
-  onSplit: (id: string, axis: 'row' | 'column') => void;
-  onClose: (id: string) => void;
-  onFocus: (id: string) => void;
-  onZoom: (id: string) => void;
-  onResize: (id: string, delta: number) => void;
-  onAssign: (id: string, serverId: string) => void;
-  servers: Server[];
-  focusedPaneId: string | undefined;
-  liveSessions: ManagedSession[];
-  onDisconnect: (sessionId: string) => void;
-}) {
-  const theme = useTheme();
-  const { width } = useWindowDimensions();
-  if (node.kind === 'split')
-    return (
-      <View
-        style={[styles.split, node.axis === 'row' && width >= 700 ? styles.row : styles.column]}
-      >
-        <View style={styles.splitControls}>
-          <Pressable accessibilityRole="button" onPress={() => onResize(node.id, -0.1)}>
-            <Text style={{ color: theme.accent }}>−</Text>
-          </Pressable>
-          <Text style={{ color: theme.muted }}>{Math.round(node.ratio * 100)}%</Text>
-          <Pressable accessibilityRole="button" onPress={() => onResize(node.id, 0.1)}>
-            <Text style={{ color: theme.accent }}>+</Text>
-          </Pressable>
-        </View>
-        <Pane
-          node={node.children[0]}
-          onSplit={onSplit}
-          onClose={onClose}
-          onFocus={onFocus}
-          onZoom={onZoom}
-          onResize={onResize}
-          onAssign={onAssign}
-          servers={servers}
-          focusedPaneId={focusedPaneId}
-          liveSessions={liveSessions}
-          onDisconnect={onDisconnect}
-        />
-        <Pane
-          node={node.children[1]}
-          onSplit={onSplit}
-          onClose={onClose}
-          onFocus={onFocus}
-          onZoom={onZoom}
-          onResize={onResize}
-          onAssign={onAssign}
-          servers={servers}
-          focusedPaneId={focusedPaneId}
-          liveSessions={liveSessions}
-          onDisconnect={onDisconnect}
-        />
+          </>
+        ) : (
+          <Text style={{ color: theme.muted }}>
+            Create your first workspace above, then choose a server for its first pane.
+          </Text>
+        )}
       </View>
-    );
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${node.title ?? 'Disconnected terminal'} pane${focusedPaneId === node.id ? ', focused' : ''}`}
-      accessibilityHint="Double tap to focus this terminal pane."
-      accessibilityState={{ selected: focusedPaneId === node.id }}
-      onPress={() => onFocus(node.id)}
-      style={[styles.pane, { borderColor: focusedPaneId === node.id ? theme.accent : theme.muted }]}
-    >
-      <Text style={{ color: theme.text }}>
-        {node.title ?? 'Disconnected terminal'}
-        {focusedPaneId === node.id ? ' · focused' : ''}
-      </Text>
-      {liveSessions.find((session) => session.paneId === node.id) ? (
-        <LivePane
-          session={liveSessions.find((session) => session.paneId === node.id)!}
-          onDisconnect={onDisconnect}
-        />
-      ) : (
-        <Text style={{ color: theme.muted }}>
-          Reconnect from Servers to attach a fresh session.
-        </Text>
-      )}
-      {node.serverId ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() =>
-            router.push({
-              pathname: '/terminal',
-              params: { serverId: node.serverId, paneId: node.id },
-            })
-          }
-        >
-          <Text style={{ color: theme.accent }}>Connect {node.title}</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.serverChoices}>
-          {servers.map((server) => (
-            <Pressable
-              key={server.id}
-              accessibilityRole="button"
-              onPress={() => onAssign(node.id, server.id)}
-            >
-              <Text style={{ color: theme.accent }}>Use {server.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      <View style={styles.paneActions}>
-        <Pressable accessibilityRole="button" onPress={() => onSplit(node.id, 'row')}>
-          <Text style={{ color: theme.accent }}>Split side-by-side</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => onSplit(node.id, 'column')}>
-          <Text style={{ color: theme.accent }}>Split stacked</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => onClose(node.id)}>
-          <Text style={{ color: theme.danger }}>Close</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => onZoom(node.id)}>
-          <Text style={{ color: theme.accent }}>Zoom</Text>
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-}
-function LivePane({
-  session,
-  onDisconnect,
-}: {
-  session: ManagedSession;
-  onDisconnect: (sessionId: string) => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.livePane, { borderColor: theme.muted }]}>
-      <View style={styles.liveHeader}>
-        <Text style={{ color: theme.accent }}>Live · {session.state}</Text>
-        <Pressable accessibilityRole="button" onPress={() => onDisconnect(session.sessionId)}>
-          <Text style={{ color: theme.danger }}>Disconnect</Text>
-        </Pressable>
-      </View>
-      <NativeTerminalView
-        style={styles.nativeTerminal}
-        sessionId={session.sessionId}
-        fontSize={14}
-        scrollback={10_000}
-        foregroundColor={theme.text}
-        backgroundColor={theme.background}
-      />
-    </View>
+    </ScrollView>
   );
 }
 const styles = StyleSheet.create({
-  page: { flex: 1 },
-  create: { paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  input: { flex: 1, borderWidth: 1, borderRadius: 8, padding: 10 },
-  renameInput: { minWidth: 100, borderWidth: 1, borderRadius: 8, padding: 8 },
-  error: { padding: 24, paddingBottom: 0 },
-  tabs: { padding: 24, gap: 8 },
-  tab: { borderWidth: 1, borderRadius: 8, padding: 10 },
-  content: { padding: 24, paddingTop: 0, gap: 12 },
-  workspaceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
+  content: { paddingHorizontal: 24, gap: 16 },
+  input: { minHeight: 48, borderWidth: 1, borderRadius: 10, padding: 12 },
+  tabs: { gap: 8, alignItems: 'stretch', paddingVertical: 4 },
+  tab: {
+    minHeight: 52,
+    minWidth: 140,
+    maxWidth: 260,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
   },
-  workspaceActions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  title: { fontSize: 19, fontWeight: '700' },
-  empty: { padding: 24 },
-  split: { gap: 8 },
-  splitControls: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  row: { flexDirection: 'row' },
-  column: { flexDirection: 'column' },
-  pane: { flex: 1, minWidth: 150, borderWidth: 1, borderRadius: 10, padding: 12, gap: 8 },
-  livePane: { height: 240, borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
-  liveHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 8 },
-  nativeTerminal: { flex: 1, minHeight: 180 },
-  paneActions: { gap: 8 },
-  serverChoices: { gap: 6 },
+  title: { fontSize: 24, fontWeight: '700', flexShrink: 0 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });
