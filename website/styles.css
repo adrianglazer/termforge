@@ -242,11 +242,40 @@ code {
   width: min(100%, 300px);
   margin-inline: auto;
 }
+.demo-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  align-items: center;
+  gap: clamp(32px, 6vw, 72px);
+}
+.demo-copy {
+  min-width: 0;
+  max-width: 580px;
+}
+.demo-copy .eyebrow {
+  margin-bottom: 16px;
+}
+.demo-copy h2 {
+  margin-bottom: 24px;
+}
+.demo-highlights {
+  margin-block: 24px;
+  color: var(--muted);
+}
+.demo-highlights strong {
+  color: var(--text);
+}
+.demo-layout figure {
+  min-width: 0;
+  width: 100%;
+  max-width: 260px;
+  justify-self: end;
+}
 .demo-video {
   display: block;
-  width: min(100%, 360px);
+  width: 100%;
   height: auto;
-  margin-inline: auto;
+  aspect-ratio: 540 / 1240;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #101213;
@@ -454,6 +483,14 @@ figcaption {
 }
 .gallery figure {
   min-width: 0;
+}
+.gallery > .gallery-wide,
+.gallery > #capture-workspace {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.gallery-wide .gallery-frame {
+  min-height: 0;
 }
 .gallery-frame {
   min-height: 390px;
@@ -729,11 +766,19 @@ details p {
   .demo-slot {
     padding: 28px 20px;
   }
-  .gallery {
+  .demo-layout {
     grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .demo-layout figure {
+    justify-self: center;
+  }
+  .gallery {
+    gap: 20px;
   }
   .gallery-frame {
-    min-height: 360px;
+    min-height: 0;
+    padding: 16px;
   }
   .gallery-frame.landscape {
     min-height: 220px;
@@ -763,6 +808,11 @@ details p {
   }
   .page-intro {
     padding-block: 48px 32px;
+  }
+}
+@media (max-width: 480px) {
+  .gallery {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 360px) {

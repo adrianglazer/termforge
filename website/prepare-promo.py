@@ -27,6 +27,18 @@ for slug,name,filters,lines,subtitle in items:
     promo=['scale=1060:2294:flags=lanczos','pad=1320:2868:130:416:color=0x101213',text('TERMFORGE',130,65,32,'0xf2a65a',True),text(lines[0],130,135,74,strong=True),text(lines[1],130,228,74,strong=True),text(subtitle,130,341,32),text('Full access requires trial or lifetime unlock.',130,2784,25,'0xaab0b1')]
     run(['-i',str(clean),'-vf',','.join(promo),'-frames:v','1','-q:v','5','-pix_fmt','yuvj420p','-map_metadata','-1',str(store/(slug+'.jpg'))])
     run(['-i',str(store/(slug+'.jpg')),'-vf','scale=540:-1:flags=lanczos','-frames:v','1','-c:v','libwebp','-quality','78','-compression_level','6','-map_metadata','-1',str(web/(slug+'-promo.webp'))])
+# Website hero: recolor only htop, preserving the captured text and app chrome.
+channels = ["r(X,Y)", "g(X,Y)", "b(X,Y)"]
+maximum = "max(r(X,Y),max(g(X,Y),b(X,Y)))"
+minimum = "min(r(X,Y),min(g(X,Y),b(X,Y)))"
+luma = "(0.2126*r(X,Y)+0.7152*g(X,Y)+0.0722*b(X,Y))"
+hero_channels = []
+for channel, background, white, amber in zip(channels, [16,18,19], [243,240,233], [255,192,138]):
+    tinted = f"if(gt({maximum}-{minimum},25),{background}+({amber}-{background})*{maximum}/255,{background}+({white}-{background})*{luma}/255)"
+    hero_channels.append(f"if(between(Y,126,1045),{tinted},{channel})")
+hero_filter = "geq=" + ":".join(f"{key}='{expr}'" for key, expr in zip(["r","g","b"],hero_channels))
+run(['-i',str(web/'terminal.webp'),'-vf',hero_filter,'-frames:v','1','-c:v','libwebp','-quality','82','-compression_level','6','-map_metadata','-1',str(web/'terminal-website.webp')])
+
 # Retain useful actions, omit connection setup, loading waits, and personal file contents.
 clip_specs=[
 (56,2, [box(8,108,249,42,'0x202b39'),text('admin@ [host hidden]',14,120,18),box(89,331,88,1035,'black'),text('admin',95,334,19)], 'Remote tools. Live output.'),

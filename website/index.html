@@ -20,7 +20,7 @@
     <meta name="twitter:card" content="summary" />
     <!-- PRODUCTION_DOMAIN / CANONICAL_URL / SOCIAL_IMAGE_URL: add verified absolute HTTPS URLs before launch. -->
     <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon.png" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20261008-layout2" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -75,7 +75,7 @@
             <div class="media-heading"><span>01 / The workstation</span><span>Portrait</span></div>
             <img
               class="product-shot hero-shot"
-              src="assets/media/terminal.webp"
+              src="assets/media/terminal-website.webp"
               width="540"
               height="1169"
               alt="Termforge on iPhone displaying a remote process monitor and terminal controls; connection details are hidden."
@@ -308,49 +308,52 @@
         </section>
 
         <section class="section" id="demo" aria-labelledby="demo-title">
-          <div class="section-head">
-            <div>
+          <div class="demo-layout">
+            <div class="demo-copy">
               <p class="eyebrow">03 / A short walkthrough</p>
               <h2 id="demo-title">Your remote tools.<br />In motion.</h2>
+              <p class="lead">
+                A short iPhone recording of terminal output, SFTP browsing, and two terminal panes.
+              </p>
+              <ul class="demo-highlights">
+                <li><strong>Terminal:</strong> live remote output with familiar accessory keys.</li>
+                <li>
+                  <strong>Files:</strong> browse remote folders and manage files through SFTP.
+                </li>
+                <li><strong>Workspaces:</strong> keep two independent terminal panes together.</li>
+              </ul>
+              <p class="small demo-summary">
+                The video plays only on request. For setup, follow the
+                <a href="support#getting-started">getting-started guide</a>.
+              </p>
             </div>
-            <p>
-              A short iPhone recording of terminal output, SFTP browsing, and two terminal panes.
-            </p>
+            <figure data-media-slot="demo">
+              <video
+                class="demo-video motion-media"
+                controls
+                playsinline
+                preload="none"
+                width="540"
+                height="1240"
+                poster="assets/media/walkthrough-poster.webp"
+                aria-label="Termforge iPhone walkthrough"
+                aria-describedby="demo-caption"
+              >
+                <source src="assets/media/walkthrough.mp4" type="video/mp4" />
+                Your browser does not support video. Read the walkthrough below.
+              </video>
+              <figcaption id="demo-caption">
+                Silent iPhone recording. Server details hidden.
+              </figcaption>
+            </figure>
           </div>
-          <figure data-media-slot="demo">
-            <video
-              class="demo-video motion-media"
-              controls
-              playsinline
-              preload="none"
-              width="540"
-              height="1240"
-              poster="assets/media/walkthrough-poster.webp"
-              aria-label="Termforge iPhone walkthrough"
-              aria-describedby="demo-caption"
-            >
-              <source src="assets/media/walkthrough.mp4" type="video/mp4" />
-              Your browser does not support video. Read the walkthrough below.
-            </video>
-            <figcaption id="demo-caption">
-              A silent, edited iPhone recording: view live remote process output, browse files
-              through SFTP, and use two independent terminal panes. Server identifiers are hidden.
-            </figcaption>
-          </figure>
-          <p class="small demo-summary">
-            Text walkthrough: the Terminal tab shows a live process monitor with accessory keys; the
-            Files tab lists remote folders and files with upload and file actions; a workspace
-            places two terminal panes on the same screen. For setup instructions, follow the
-            <a href="support#getting-started">getting-started guide</a>. This text stays available
-            with reduced motion or video disabled. The video plays only on request.
-          </p>
         </section>
 
         <section class="section" id="gallery" aria-labelledby="gallery-title">
           <div class="section-head">
             <div>
               <p class="eyebrow">04 / A closer look</p>
-              <h2 id="gallery-title">Four views of<br />the workstation.</h2>
+              <h2 id="gallery-title">Five views of<br />the workstation.</h2>
             </div>
             <p>Real iPhone screenshots with promotional captions. Server identifiers are hidden.</p>
           </div>
@@ -372,22 +375,6 @@
                 your remote terminal.
               </figcaption>
             </figure>
-            <figure id="capture-workspace" data-media-slot="workspace">
-              <div class="gallery-frame landscape">
-                <img
-                  class="product-shot"
-                  src="assets/media/workspace-promo.webp"
-                  width="1000"
-                  height="460"
-                  alt="Termforge in landscape with two independent remote terminal panes."
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-              <figcaption>
-                <strong>Context, side by side.</strong>Two terminals in a landscape workspace.
-              </figcaption>
-            </figure>
             <figure id="capture-files" data-media-slot="files">
               <div class="gallery-frame">
                 <img
@@ -405,6 +392,23 @@
                 files through SFTP.
               </figcaption>
             </figure>
+            <figure id="capture-servers" data-media-slot="servers">
+              <div class="gallery-frame">
+                <img
+                  class="product-shot"
+                  src="assets/media/servers-promo.webp"
+                  width="540"
+                  height="1173"
+                  alt="Termforge saved server profiles with quick access to keys and workspaces."
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>
+                <strong>Your servers, within reach.</strong>Keep connection profiles together and
+                choose where to work.
+              </figcaption>
+            </figure>
             <figure id="capture-keys" data-media-slot="keys">
               <div class="gallery-frame">
                 <img
@@ -420,6 +424,22 @@
               <figcaption>
                 <strong>Your keys, on your iPhone.</strong>Manage Ed25519 keys with iOS Keychain
                 protection.
+              </figcaption>
+            </figure>
+            <figure class="gallery-wide" id="capture-workspace" data-media-slot="workspace">
+              <div class="gallery-frame landscape">
+                <img
+                  class="product-shot"
+                  src="assets/media/workspace-promo.webp"
+                  width="1000"
+                  height="460"
+                  alt="Termforge in landscape with two independent remote terminal panes."
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>
+                <strong>Context, side by side.</strong>Two terminals in a landscape workspace.
               </figcaption>
             </figure>
           </div>

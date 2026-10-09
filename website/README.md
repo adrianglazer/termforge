@@ -283,7 +283,9 @@ refund guarantee, public URL or successful production purchase is invented.
 
 Task 10 checks: all four pages at 320/390/768/1440 px have no horizontal overflow
 or missing images; keyboard skip/focus and native FAQ expansion pass; no console
-warnings/errors. Content has no scripts, and nginx sends `script-src 'none'`.
+warnings/errors. Content has no authored scripts. Nginx allows same-origin scripts
+(`script-src 'self'`) so Cloudflare's injected email-obfuscation decoder can run;
+inline scripts and scripts from external origins remain blocked.
 JavaScript-disable/reduced-motion emulation is unavailable in the browser API;
 plain HTML disclosures and CSS remain inspectable. The standalone Docker image
 build passes from `website/`, with source-identical served pages, 115 relative
